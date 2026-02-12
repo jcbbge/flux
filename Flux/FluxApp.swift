@@ -1,6 +1,6 @@
 //
-//  freewriteApp.swift
-//  freewrite
+//  FluxApp.swift
+//  Flux
 //
 //  Created by thorfinn on 2/14/25.
 //
@@ -8,7 +8,7 @@
 import SwiftUI
 
 @main
-struct freewriteApp: App {
+struct FluxApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @AppStorage("colorScheme") private var colorSchemeString: String = "light"
     

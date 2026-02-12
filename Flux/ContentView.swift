@@ -1,7 +1,7 @@
 // Swift 5.0
 //
 //  ContentView.swift
-//  freewrite
+//  Flux
 //
 //  Created by thorfinn on 2/14/25.
 //
@@ -90,7 +90,12 @@ struct ContentView: View {
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     let entryHeight: CGFloat = 40
     
-    let availableFonts = NSFontManager.shared.availableFontFamilies
+    import FluxModels  // Add import for Models
+
+let availableFonts = NSFontManager.shared.availableFontFamilies
+
+// Add state for manager
+@StateObject private var workspaceManager = FluxWorkspaceManager()
     let standardFonts = ["Lato-Regular", "Arial", ".AppleSystemUIFont", "Times New Roman"]
     let fontSizes: [CGFloat] = [16, 18, 20, 22, 24, 26]
     let placeholderOptions = [
@@ -108,21 +113,61 @@ struct ContentView: View {
     private let fileManager = FileManager.default
     private let saveTimer = Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()
     
-    // Add cached documents directory
-    private let documentsDirectory: URL = {
-        let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Freewrite")
-        
-        // Create Freewrite directory if it doesn't exist
-        if !FileManager.default.fileExists(atPath: directory.path) {
+    private static func ensureDirectoryExists(at url: URL, label: String) -> URL {
+        let fileManager = FileManager.default
+        var isDirectory: ObjCBool = false
+        if fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) {
+            if !isDirectory.boolValue {
+                print("Warning: expected directory for \(label) at \(url.path) but found a file")
+            }
+        } else {
             do {
-                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-                print("Successfully created Freewrite directory")
+                try fileManager.createDirectory(at: url, withIntermediateDirectories: true)
+                print("Created \(label) at: \(url.path)")
             } catch {
-                print("Error creating directory: \(error)")
+                print("Error creating \(label): \(error)")
+            }
+        }
+        return url
+    }
+    
+    // Add cached directories inside /Users/<user>/flux
+    private let documentsDirectory: URL = {
+        let fileManager = FileManager.default
+        let homeDirectory = fileManager.homeDirectoryForCurrentUser
+        let targetDirectory = homeDirectory
+            .appendingPathComponent("flux", isDirectory: true)
+            .appendingPathComponent("Entries", isDirectory: true)
+        let entriesDirectory = ContentView.ensureDirectoryExists(at: targetDirectory, label: "Flux entries directory")
+        
+        // Migrate existing entries from the legacy Documents/Flux directory if it exists
+        let legacyDirectory = fileManager
+            .urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Flux", isDirectory: true)
+        if fileManager.fileExists(atPath: legacyDirectory.path) {
+            do {
+                let legacyFiles = try fileManager.contentsOfDirectory(at: legacyDirectory, includingPropertiesForKeys: nil)
+                for file in legacyFiles where file.pathExtension == "md" {
+                    let destination = entriesDirectory.appendingPathComponent(file.lastPathComponent)
+                    if !fileManager.fileExists(atPath: destination.path) {
+                        try fileManager.copyItem(at: file, to: destination)
+                        print("Migrated legacy entry: \(file.lastPathComponent)")
+                    }
+                }
+            } catch {
+                print("Error migrating legacy entries: \(error)")
             }
         }
         
-        return directory
+        return entriesDirectory
+    }()
+    
+    private let backupDirectory: URL = {
+        let homeDirectory = FileManager.default.homeDirectoryForCurrentUser
+        let targetDirectory = homeDirectory
+            .appendingPathComponent("flux", isDirectory: true)
+            .appendingPathComponent("EntriesBackup", isDirectory: true)
+        return ContentView.ensureDirectoryExists(at: targetDirectory, label: "Flux backups directory")
     }()
     
     // Add shared prompt constant
@@ -174,6 +219,7 @@ struct ContentView: View {
         do {
             try text.write(to: fileURL, atomically: true, encoding: .utf8)
             print("Successfully saved file")
+            backupEntryFile(from: fileURL)
         } catch {
             print("Error saving file: \(error)")
             print("Error details: \(error.localizedDescription)")
@@ -294,7 +340,7 @@ struct ContentView: View {
             }
             
             // Check if we have only one entry and it's the welcome message
-            let hasOnlyWelcomeEntry = entries.count == 1 && entriesWithDates.first?.content.contains("Welcome to Freewrite.") == true
+            let hasOnlyWelcomeEntry = entries.count == 1 && entriesWithDates.first?.content.contains("Welcome to Flux.") == true
             
             if entries.isEmpty {
                 // First time user - create entry with welcome message
@@ -668,7 +714,7 @@ struct ContentView: View {
                                             .padding(.vertical, 8)
                                         
                                         Divider()
-                                        
+
                                         Button(action: {
                                             copyPromptToClipboard()
                                             didCopyPrompt = true
@@ -1130,6 +1176,7 @@ struct ContentView: View {
         do {
             try text.write(to: fileURL, atomically: true, encoding: .utf8)
             print("Successfully saved entry: \(entry.filename)")
+            backupEntryFile(from: fileURL)
             updatePreviewText(for: entry)  // Update preview after saving
         } catch {
             print("Error saving entry: \(error)")
@@ -1231,6 +1278,20 @@ struct ContentView: View {
             }
         } catch {
             print("Error deleting file: \(error)")
+        }
+    }
+    
+    private func backupEntryFile(from fileURL: URL) {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd-HHmmssSSS"
+        let backupFilename = "\(formatter.string(from: Date()))-\(fileURL.lastPathComponent)"
+        let backupURL = backupDirectory.appendingPathComponent(backupFilename)
+        
+        do {
+            try fileManager.copyItem(at: fileURL, to: backupURL)
+            print("Stored backup at: \(backupURL.path)")
+        } catch {
+            print("Error creating backup: \(error)")
         }
     }
     
