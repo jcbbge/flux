@@ -25,8 +25,16 @@ class FluxCategorizerService {
         Output: { "fluxTitle": "Human-readable title (1-2 words from content)", "fluxType": "journal" (infer if missing), "category": "e.g., Reflection", "summary": "1-2 sentence roll-up", "tags": ["ui", "dev"], "links": [], "insights": ["Link to similar?", "Stagnation flag?"] }
         No deep analysis; keep simple.
         """
-        
-        return await callCategorizer(with: prompt, type: .enrich)
+        guard let result = await callCategorizer(with: prompt, type: .enrich) else { return nil }
+        return FluxMeta(
+            fluxTitle: result["fluxTitle"] as? String,
+            fluxType: result["fluxType"] as? String ?? "journal",
+            category: result["category"] as? String,
+            summary: result["summary"] as? String,
+            tags: result["tags"] as? [String] ?? [],
+            links: (result["links"] as? [String])?.compactMap { UUID(uuidString: $0) } ?? [],
+            insights: result["insights"] as? [String] ?? []
+        )
     }
     
     func propagateFluxLinks(_ entry: FluxEntry, scope: FluxScope = .all) async -> [UUID] {
@@ -47,8 +55,8 @@ class FluxCategorizerService {
     }
     
     func searchFluxSimilar(_ query: String, threshold: Float = 0.7) async -> [FluxEntry] {
-        // Embed query
-        let embedding = await generateEmbedding(for: query)
+        // Embed query (future: use for vector search)
+        _ = await generateEmbedding(for: query)
         // For full impl, query stored embeddings; stub with keyword match for now
         let allEntries = await FileFluxProvider().scanFluxEntries(scope: .all, project: nil)
         return allEntries.filter { entry in

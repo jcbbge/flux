@@ -110,8 +110,6 @@ struct ContentView: View {
     @State private var pendingSaveTimer: Timer? = nil
     private let saveDebounceInterval: TimeInterval = 2.0
     
-    import FluxModels  // Add import for Models
-
 let availableFonts = NSFontManager.shared.availableFontFamilies
 
 // Add state for manager

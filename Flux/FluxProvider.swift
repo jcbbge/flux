@@ -9,21 +9,21 @@
 import Foundation
 
 protocol FluxProvider {
-    func writeFluxEntry(_ entry: FluxEntry, project: String? = nil) async throws -> URL
-    func scanFluxEntries(scope: FluxScope, project: String? = nil) async -> [FluxEntry]
-    func searchFlux(query: String, scope: FluxScope, project: String? = nil) async -> [FluxEntry]
+    func writeFluxEntry(_ entry: FluxEntry, project: String?) async throws -> URL
+    func scanFluxEntries(scope: FluxScope, project: String?) async -> [FluxEntry]
+    func searchFlux(query: String, scope: FluxScope, project: String?) async -> [FluxEntry]
     func loadDaily() async -> FluxEntry?
-    func generateFilename(for type: FluxType, project: String? = nil) -> String
+    func generateFilename(for type: FluxType, project: String?) -> String
 }
 
 class FileFluxProvider: FluxProvider {
     private let workspaceURL = URL(fileURLWithPath: "/Users/jcbbge/flux/workspace")
     private let userProjectsURL = URL(fileURLWithPath: "/Users/jcbbge")  // Root for globbing projects
-    
+
     init() {
         createDirsIfNeeded()
     }
-    
+
     private func createDirsIfNeeded() {
         let dirs = ["entries", "logs", "metrics", "projects"]
         for dir in dirs {
@@ -31,7 +31,7 @@ class FileFluxProvider: FluxProvider {
             try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         }
     }
-    
+
     func writeFluxEntry(_ entry: FluxEntry, project: String? = nil) async throws -> URL {
         let filename = generateFilename(for: .journal, project: project)  // Default type; adjust if needed
         let targetDir: URL
@@ -46,7 +46,7 @@ class FileFluxProvider: FluxProvider {
         try content.write(to: fileURL, atomically: true, encoding: .utf8)
         return fileURL
     }
-    
+
     func scanFluxEntries(scope: FluxScope, project: String? = nil) async -> [FluxEntry] {
         var entries: [FluxEntry] = []
         let targetDirs: [URL]
@@ -56,7 +56,7 @@ class FileFluxProvider: FluxProvider {
         } else {
             targetDirs = [workspaceURL]
         }
-        
+
         for dir in targetDirs {
             let mdFiles = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.contentModificationDateKey])
                 .filter { $0.pathExtension == "md" }
@@ -66,7 +66,7 @@ class FileFluxProvider: FluxProvider {
                 }
             }
         }
-        
+
         // Sort by date descending (parse from filename)
         return entries.sorted { entry1, entry2 in
             // Extract timestamp from filename
@@ -75,7 +75,7 @@ class FileFluxProvider: FluxProvider {
             return date1 > date2
         }
     }
-    
+
     private func extractDate(from filename: String) -> Date {
         // Direct string extraction: timestamp is first 19 chars (yyyy-MM-dd-HH-mm-ss)
         let prefix = filename.prefix(19)
@@ -85,7 +85,7 @@ class FileFluxProvider: FluxProvider {
         }
         return Date()
     }
-    
+
     func searchFlux(query: String, scope: FluxScope, project: String? = nil) async -> [FluxEntry] {
         let allEntries = await scanFluxEntries(scope: .all, project: project)
         return allEntries.filter { entry in
@@ -94,7 +94,7 @@ class FileFluxProvider: FluxProvider {
             }
         }
     }
-    
+
     func loadDaily() async -> FluxEntry? {
         let today = DateFormatterCache.shared.string(from: Date(), format: "yyyy-MM-dd")
         let entries = await scanFluxEntries(scope: .entries, project: nil)
@@ -102,7 +102,7 @@ class FileFluxProvider: FluxProvider {
             entry.filename.hasPrefix("\(today)-")
         }
     }
-    
+
     func generateFilename(for type: FluxType, project: String? = nil) -> String {
         let timestamp = DateFormatterCache.shared.string(from: Date(), format: "yyyy-MM-dd-HH-mm-ss")
         if let project = project {
