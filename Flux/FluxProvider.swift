@@ -19,10 +19,8 @@ protocol FluxProvider {
 class FileFluxProvider: FluxProvider {
     private let workspaceURL = URL(fileURLWithPath: "/Users/jcbbge/flux/workspace")
     private let userProjectsURL = URL(fileURLWithPath: "/Users/jcbbge")  // Root for globbing projects
-    private let formatter = DateFormatter()
     
     init() {
-        formatter.dateFormat = "yyyy-MM-dd-HH-mm-ss"
         createDirsIfNeeded()
     }
     
@@ -81,8 +79,7 @@ class FileFluxProvider: FluxProvider {
     private func extractDate(from filename: String) -> Date {
         let range = filename.range(of: "^(\\d{4}-\\d{2}-\\d{2}-\\d{2}-\\d{2}-\\d{2})", options: .regularExpression)
         if let match = range, let dateString = DateFormatter.matchToDate(string: filename, range: match) {
-            formatter.dateFormat = "yyyy-MM-dd-HH-mm-ss"
-            return formatter.date(from: dateString) ?? Date()
+            return DateFormatterCache.shared.date(from: dateString, format: "yyyy-MM-dd-HH-mm-ss") ?? Date()
         }
         return Date()
     }
@@ -97,9 +94,7 @@ class FileFluxProvider: FluxProvider {
     }
     
     func loadDaily() async -> FluxEntry? {
-        let todayFormatter = DateFormatter()
-        todayFormatter.dateFormat = "yyyy-MM-dd"
-        let today = todayFormatter.string(from: Date())
+        let today = DateFormatterCache.shared.string(from: Date(), format: "yyyy-MM-dd")
         let entries = await scanFluxEntries(scope: .entries, project: nil)
         return entries.first { entry in
             entry.filename.hasPrefix("\(today)-")
@@ -107,7 +102,7 @@ class FileFluxProvider: FluxProvider {
     }
     
     func generateFilename(for type: FluxType, project: String? = nil) -> String {
-        let timestamp = formatter.string(from: Date())
+        let timestamp = DateFormatterCache.shared.string(from: Date(), format: "yyyy-MM-dd-HH-mm-ss")
         if let project = project {
             return "\(timestamp)-\(project).md"
         }

@@ -11,6 +11,27 @@ import AppKit
 import UniformTypeIdentifiers
 import PDFKit
 
+// MARK: - DateFormatter Cache (Performance Fix)
+struct DateFormatterCache {
+    static let shared = DateFormatterCache()
+    private let formatter = DateFormatter()
+    private let queue = DispatchQueue(label: "flux.dateformatter")
+    
+    func string(from date: Date, format: String) -> String {
+        queue.sync {
+            formatter.dateFormat = format
+            return formatter.string(from: date)
+        }
+    }
+    
+    func date(from string: String, format: String) -> Date? {
+        queue.sync {
+            formatter.dateFormat = format
+            return formatter.date(from: string)
+        }
+    }
+}
+
 struct HumanEntry: Identifiable {
     let id: UUID
     let date: String
@@ -20,13 +41,8 @@ struct HumanEntry: Identifiable {
     static func createNew() -> HumanEntry {
         let id = UUID()
         let now = Date()
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd-HH-mm-ss"
-        let dateString = dateFormatter.string(from: now)
-        
-        // For display
-        dateFormatter.dateFormat = "MMM d"
-        let displayDate = dateFormatter.string(from: now)
+        let dateString = DateFormatterCache.shared.string(from: now, format: "yyyy-MM-dd-HH-mm-ss")
+        let displayDate = DateFormatterCache.shared.string(from: now, format: "MMM d")
         
         return HumanEntry(
             id: id,
@@ -89,6 +105,10 @@ struct ContentView: View {
     @State private var isHoveringBackspaceToggle = false // Add state for backspace toggle hover
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     let entryHeight: CGFloat = 40
+    
+    // Debounced save timer
+    @State private var pendingSaveTimer: Timer? = nil
+    private let saveDebounceInterval: TimeInterval = 2.0
     
     import FluxModels  // Add import for Models
 
@@ -272,10 +292,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                 
                 // Parse the date string
                 let dateString = String(filename[dateMatch].dropFirst().dropLast())
-                let dateFormatter = DateFormatter()
-                dateFormatter.dateFormat = "yyyy-MM-dd-HH-mm-ss"
-                
-                guard let fileDate = dateFormatter.date(from: dateString) else {
+                guard let fileDate = DateFormatterCache.shared.date(from: dateString, format: "yyyy-MM-dd-HH-mm-ss") else {
                     print("Failed to parse date from filename: \(filename)")
                     return nil
                 }
@@ -283,14 +300,22 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                 // Read file contents for preview
                 do {
                     let content = try String(contentsOf: fileURL, encoding: .utf8)
-                    let preview = content
-                        .replacingOccurrences(of: "\n", with: " ")
-                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    // Read only first 200 bytes for preview (partial read optimization)
+                    let preview: String
+                    if content.count > 200 {
+                        let endIndex = content.index(content.startIndex, offsetBy: 200)
+                        let partialContent = String(content[..<endIndex])
+                        preview = partialContent
+                            .replacingOccurrences(of: "\n", with: " ")
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                    } else {
+                        preview = content
+                            .replacingOccurrences(of: "\n", with: " ")
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                    }
                     let truncated = preview.isEmpty ? "" : (preview.count > 30 ? String(preview.prefix(30)) + "..." : preview)
-                    
                     // Format display date
-                    dateFormatter.dateFormat = "MMM d"
-                    let displayDate = dateFormatter.string(from: fileDate)
+                    let displayDate = DateFormatterCache.shared.string(from: fileDate, format: "MMM d")
                     
                     return (
                         entry: HumanEntry(
@@ -323,9 +348,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
             // Check if there's an empty entry from today
             let hasEmptyEntryToday = entries.contains { entry in
                 // Convert the display date (e.g. "Mar 14") to a Date object
-                let dateFormatter = DateFormatter()
-                dateFormatter.dateFormat = "MMM d"
-                if let entryDate = dateFormatter.date(from: entry.date) {
+                if let entryDate = DateFormatterCache.shared.date(from: entry.date, format: "MMM d") {
                     // Set year component to current year since our stored dates don't include year
                     var components = calendar.dateComponents([.year, .month, .day], from: entryDate)
                     components.year = calendar.component(.year, from: today)
@@ -354,9 +377,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                 // Select the most recent empty entry from today or the welcome entry
                 if let todayEntry = entries.first(where: { entry in
                     // Convert the display date (e.g. "Mar 14") to a Date object
-                    let dateFormatter = DateFormatter()
-                    dateFormatter.dateFormat = "MMM d"
-                    if let entryDate = dateFormatter.date(from: entry.date) {
+                    if let entryDate = DateFormatterCache.shared.date(from: entry.date, format: "MMM d") {
                         // Set year component to current year since our stored dates don't include year
                         var components = calendar.dateComponents([.year, .month, .day], from: entryDate)
                         components.year = calendar.component(.year, from: today)
@@ -1002,6 +1023,8 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                         // Save current entry before switching
                                         if let currentId = selectedEntryId,
                                            let currentEntry = entries.first(where: { $0.id == currentId }) {
+                                        // Immediate save on context switch
+                                        pendingSaveTimer?.invalidate()
                                             saveEntry(entry: currentEntry)
                                         }
                                         
@@ -1113,10 +1136,13 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
             loadExistingEntries()
         }
         .onChange(of: text) { _ in
-            // Save current entry when text changes
             if let currentId = selectedEntryId,
                let currentEntry = entries.first(where: { $0.id == currentId }) {
-                saveEntry(entry: currentEntry)
+                // Debounced save: cancel pending, schedule new
+                pendingSaveTimer?.invalidate()
+                pendingSaveTimer = Timer.scheduledTimer(withTimeInterval: saveDebounceInterval, repeats: false) { _ in
+                    saveEntry(entry: currentEntry)
+                }
             }
         }
         .onReceive(timer) { _ in
@@ -1150,22 +1176,18 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
     }
     
     private func updatePreviewText(for entry: HumanEntry) {
-        let documentsDirectory = getDocumentsDirectory()
-        let fileURL = documentsDirectory.appendingPathComponent(entry.filename)
+        // Deprecated: use updatePreviewFromMemory instead
+    }
+    
+    private func updatePreviewFromMemory(for entry: HumanEntry, content: String) {
+        let preview = content
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let truncated = preview.isEmpty ? "" : (preview.count > 30 ? String(preview.prefix(30)) + "..." : preview)
         
-        do {
-            let content = try String(contentsOf: fileURL, encoding: .utf8)
-            let preview = content
-                .replacingOccurrences(of: "\n", with: " ")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            let truncated = preview.isEmpty ? "" : (preview.count > 30 ? String(preview.prefix(30)) + "..." : preview)
-            
-            // Find and update the entry in the entries array
-            if let index = entries.firstIndex(where: { $0.id == entry.id }) {
-                entries[index].previewText = truncated
-            }
-        } catch {
-            print("Error updating preview text: \(error)")
+        // Find and update the entry in the entries array
+        if let index = entries.firstIndex(where: { $0.id == entry.id }) {
+            entries[index].previewText = truncated
         }
     }
     
@@ -1177,7 +1199,8 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
             try text.write(to: fileURL, atomically: true, encoding: .utf8)
             print("Successfully saved entry: \(entry.filename)")
             backupEntryFile(from: fileURL)
-            updatePreviewText(for: entry)  // Update preview after saving
+            // Direct preview update from in-memory text (no file re-read)
+            updatePreviewFromMemory(for: entry, content: text)
         } catch {
             print("Error saving entry: \(error)")
         }
@@ -1282,9 +1305,8 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
     }
     
     private func backupEntryFile(from fileURL: URL) {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd-HHmmssSSS"
-        let backupFilename = "\(formatter.string(from: Date()))-\(fileURL.lastPathComponent)"
+        let timestamp = DateFormatterCache.shared.string(from: Date(), format: "yyyyMMdd-HHmmssSSS")
+        let backupFilename = "\(timestamp)-\(fileURL.lastPathComponent)"
         let backupURL = backupDirectory.appendingPathComponent(backupFilename)
         
         do {

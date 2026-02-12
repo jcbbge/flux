@@ -58,11 +58,8 @@ struct FluxEntry: Identifiable, Equatable {
             let timestampMatch = filename.range(of: "^(\\d{4}-\\d{2}-\\d{2}-\\d{2}-\\d{2}-\\d{2})", options: .regularExpression)
             guard let match = timestampMatch else { return nil }
             let dateString = String(filename[match])
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd-HH-mm-ss"
-            guard let date = formatter.date(from: dateString) else { return nil }
-            formatter.dateFormat = "MMM d"
-            let displayDate = formatter.string(from: date)
+            guard let date = DateFormatterCache.shared.date(from: dateString, format: "yyyy-MM-dd-HH-mm-ss") else { return nil }
+            let displayDate = DateFormatterCache.shared.string(from: date, format: "MMM d")
             let uuid = UUID()
             
             // Parse YAML frontmatter
@@ -112,9 +109,7 @@ struct FluxEntry: Identifiable, Equatable {
     }
     
     static func generateFilename(for type: String, project: String? = nil) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd-HH-mm-ss"
-        let timestamp = formatter.string(from: Date())
+        let timestamp = DateFormatterCache.shared.string(from: Date(), format: "yyyy-MM-dd-HH-mm-ss")
         if let project = project {
             return "\(timestamp)-\(project).md"
         }
