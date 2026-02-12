@@ -2,7 +2,7 @@
 //  VersionInfo.swift
 //  Flux
 //
-//  Minimal git commit verification. Indicator first: [-] hash or [✓] hash
+//  Git commit display. Computed once on load, not every render.
 //
 
 import Foundation
@@ -58,10 +58,13 @@ struct VersionInfo {
     }
 }
 
-// MARK: - Sidebar Integration
+// MARK: - Sidebar Version Display
+// Computes values once on appear to avoid blocking render
 
-struct VersionInfoBar: View {
+struct VersionInfoInline: View {
     @Environment(\.colorScheme) var colorScheme
+    @State private var indicator: String = "[?]"
+    @State private var hash: String = VersionInfo.shortCommit
     
     var textColor: Color {
         colorScheme == .light ? Color.gray : Color.gray.opacity(0.8)
@@ -69,15 +72,20 @@ struct VersionInfoBar: View {
     
     var body: some View {
         HStack(spacing: 6) {
-            Text(VersionInfo.statusIndicator)
+            Text(indicator)
                 .font(.system(size: 10))
                 .foregroundColor(textColor)
             
-            Text(VersionInfo.shortCommit)
+            Text(hash)
                 .font(.system(size: 10, design: .monospaced))
                 .foregroundColor(textColor)
             
             Spacer()
+        }
+        .onAppear {
+            // Compute once on appear, not during render
+            indicator = VersionInfo.statusIndicator
+            hash = VersionInfo.shortCommit
         }
     }
 }

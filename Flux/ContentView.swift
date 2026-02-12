@@ -994,24 +994,17 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                     }) {
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
-                            HStack(spacing: 4) {
-                                Text("Show in Finder")
-                                    .font(.system(size: 13))
-                                    .foregroundColor(isHoveringHistory ? textHoverColor : textColor)
-                                Image(systemName: "arrow.up.right")
-                                    .font(.system(size: 10))
-                                    .foregroundColor(isHoveringHistory ? textHoverColor : textColor)
-                            }
+                                HStack(spacing: 4) {
+                                    Text("Show in Finder")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(isHoveringHistory ? textHoverColor : textColor)
+                                    Image(systemName: "arrow.up.right")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(isHoveringHistory ? textHoverColor : textColor)
+                                }
                                 
                                 // Build hash where path was
-                                HStack(spacing: 6) {
-                                    Text(VersionInfo.statusIndicator)
-                                    .font(.system(size: 10))
-                                        .foregroundColor(colorScheme == .light ? Color.gray : Color.gray.opacity(0.8))
-                                    Text(VersionInfo.shortCommit)
-                                        .font(.system(size: 10, design: .monospaced))
-                                        .foregroundColor(colorScheme == .light ? Color.gray : Color.gray.opacity(0.8))
-                        }
+                                VersionInfoInline()
                             }
                             Spacer()
                         }
