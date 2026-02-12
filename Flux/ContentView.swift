@@ -958,6 +958,9 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                     NSCursor.pop()
                                 }
                             }
+                            
+                            // Version info indicator
+                            VersionInfoView()
                         }
                         .padding(8)
                         .cornerRadius(6)
