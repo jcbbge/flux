@@ -2,8 +2,7 @@
 //  VersionInfo.swift
 //  Flux
 //
-//  Created by Claude on 2/12/26.
-//  Embeds and displays git commit hash with verification.
+//  Minimal git commit verification - no emojis, text-only status
 //
 
 import Foundation
@@ -21,16 +20,13 @@ struct VersionInfo {
     }
     
     /// Check if running app matches the latest commit in the repo
-    /// Returns: (isMatch: Bool, repoCommit: String?, error: String?)
-    static func verifyAgainstRepo() -> (isMatch: Bool, repoCommit: String?, error: String?) {
+    static func verifyAgainstRepo() -> (isMatch: Bool, repoCommit: String?) {
         let repoPath = "/Users/jcbbge/flux"
         
-        // Check if repo exists
         guard FileManager.default.fileExists(atPath: repoPath) else {
-            return (false, nil, "Repo not found")
+            return (false, nil)
         }
         
-        // Get HEAD commit from repo
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/git")
         task.arguments = ["-C", repoPath, "rev-parse", "--short", "HEAD"]
@@ -46,134 +42,59 @@ struct VersionInfo {
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             guard let repoCommit = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !repoCommit.isEmpty else {
-                return (false, nil, "Failed to read repo commit")
+                return (false, nil)
             }
             
             let isMatch = embeddedCommit.hasPrefix(repoCommit) || repoCommit.hasPrefix(embeddedCommit)
-            return (isMatch, repoCommit, nil)
+            return (isMatch, repoCommit)
             
         } catch {
-            return (false, nil, "Git error: \(error.localizedDescription)")
+            return (false, nil)
         }
     }
     
-    /// Formatted status message for UI
-    static var statusText: String {
+    /// Status indicator text - no emojis, minimal style
+    static var statusIndicator: String {
         let result = verifyAgainstRepo()
-        
-        if let error = result.error {
-            return "Commit: \(shortCommit) (⚠️ \(error))"
+        if result.repoCommit == nil {
+            return "[?]"
         }
-        
-        if result.isMatch {
-            return "Commit: \(shortCommit) ✅"
-        } else {
-            return "Commit: \(shortCommit) ❌ (repo: \(result.repoCommit ?? "unknown"))"
-        }
-    }
-    
-    /// Color indicator for status
-    static var statusColor: Color {
-        let result = verifyAgainstRepo()
-        
-        if result.error != nil {
-            return .orange
-        }
-        
-        return result.isMatch ? .green : .red
+        return result.isMatch ? "[✓]" : "[X]"
     }
 }
 
-// MARK: - SwiftUI View Extension
+// MARK: - Sidebar Header Integration
 
-struct VersionInfoView: View {
-    @State private var isExpanded = false
+struct VersionInfoBar: View {
     @Environment(\.colorScheme) var colorScheme
     
+    var textColor: Color {
+        colorScheme == .light ? Color.gray : Color.gray.opacity(0.8)
+    }
+    
     var body: some View {
-        Button(action: {
-            isExpanded.toggle()
-        }) {
-            HStack(spacing: 4) {
-                Circle()
-                    .fill(VersionInfo.statusColor)
-                    .frame(width: 8, height: 8)
-                
-                Text(VersionInfo.shortCommit)
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundColor(colorScheme == .light ? .gray : .gray.opacity(0.8))
-            }
-        }
-        .buttonStyle(.plain)
-        .help(VersionInfo.statusText)
-        .popover(isPresented: $isExpanded, arrowEdge: .bottom) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text("Build Info")
-                        .font(.headline)
-                    Spacer()
-                    Circle()
-                        .fill(VersionInfo.statusColor)
-                        .frame(width: 10, height: 10)
-                }
-                
-                Divider()
-                
-                Group {
-                    HStack {
-                        Text("Embedded:")
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text(VersionInfo.embeddedCommit)
-                            .font(.system(.caption, design: .monospaced))
-                    }
-                    
-                    let result = VersionInfo.verifyAgainstRepo()
-                    
-                    if let repoCommit = result.repoCommit {
-                        HStack {
-                            Text("Repo HEAD:")
-                                .foregroundColor(.secondary)
-                            Spacer()
-                            Text(repoCommit)
-                                .font(.system(.caption, design: .monospaced))
-                        }
-                    }
-                    
-                    if let error = result.error {
-                        HStack {
-                            Text("Error:")
-                                .foregroundColor(.secondary)
-                            Spacer()
-                            Text(error)
-                                .font(.caption)
-                                .foregroundColor(.orange)
-                        }
-                    } else if result.isMatch {
-                        HStack {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(.green)
-                            Text("Build matches repo")
-                                .foregroundColor(.green)
-                        }
-                    } else {
-                        HStack {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(.red)
-                            Text("Build differs from repo")
-                                .foregroundColor(.red)
-                        }
-                    }
-                }
-            }
-            .padding()
-            .frame(width: 280)
+        HStack(spacing: 6) {
+            Text("build:")
+                .font(.system(size: 10))
+                .foregroundColor(textColor)
+            
+            Text(VersionInfo.shortCommit)
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(textColor)
+            
+            Text(VersionInfo.statusIndicator)
+                .font(.system(size: 10))
+                .foregroundColor(statusColor)
+            
+            Spacer()
         }
     }
-}
-
-// MARK: - Preview
-#Preview {
-    VersionInfoView()
-        .padding()
+    
+    var statusColor: Color {
+        let result = VersionInfo.verifyAgainstRepo()
+        if result.repoCommit == nil {
+            return .orange
+        }
+        return result.isMatch ? Color.gray.opacity(0.6) : .red
+    }
 }

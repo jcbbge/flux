@@ -958,9 +958,6 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                     NSCursor.pop()
                                 }
                             }
-                            
-                            // Version info indicator
-                            VersionInfoView()
                         }
                         .padding(8)
                         .cornerRadius(6)
@@ -1020,6 +1017,10 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                         isHoveringHistory = hovering
                     }
                     
+                    // Version info - minimal, consistent with sidebar style
+                    VersionInfoBar()
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
                     Divider()
                     
                     // Entries List
