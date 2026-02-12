@@ -2,27 +2,23 @@
 //  VersionInfo.swift
 //  Flux
 //
-//  Minimal git commit verification - no emojis, text-only status
+//  Minimal git commit verification. No colors, no labels, no emojis.
 //
 
 import Foundation
 import SwiftUI
 
 struct VersionInfo {
-    /// The git commit hash embedded at build time
     static var embeddedCommit: String {
         Bundle.main.infoDictionary?["GitCommit"] as? String ?? "unknown"
     }
     
-    /// Short hash (first 7 chars) for display
     static var shortCommit: String {
         String(embeddedCommit.prefix(7))
     }
     
-    /// Check if running app matches the latest commit in the repo
     static func verifyAgainstRepo() -> (isMatch: Bool, repoCommit: String?) {
         let repoPath = "/Users/jcbbge/flux"
-        
         guard FileManager.default.fileExists(atPath: repoPath) else {
             return (false, nil)
         }
@@ -53,7 +49,6 @@ struct VersionInfo {
         }
     }
     
-    /// Status indicator text - no emojis, minimal style
     static var statusIndicator: String {
         let result = verifyAgainstRepo()
         if result.repoCommit == nil {
@@ -63,7 +58,7 @@ struct VersionInfo {
     }
 }
 
-// MARK: - Sidebar Header Integration
+// MARK: - Sidebar Integration
 
 struct VersionInfoBar: View {
     @Environment(\.colorScheme) var colorScheme
@@ -74,27 +69,15 @@ struct VersionInfoBar: View {
     
     var body: some View {
         HStack(spacing: 6) {
-            Text("build:")
-                .font(.system(size: 10))
-                .foregroundColor(textColor)
-            
             Text(VersionInfo.shortCommit)
                 .font(.system(size: 10, design: .monospaced))
                 .foregroundColor(textColor)
             
             Text(VersionInfo.statusIndicator)
                 .font(.system(size: 10))
-                .foregroundColor(statusColor)
+                .foregroundColor(textColor)
             
             Spacer()
         }
-    }
-    
-    var statusColor: Color {
-        let result = VersionInfo.verifyAgainstRepo()
-        if result.repoCommit == nil {
-            return .orange
-        }
-        return result.isMatch ? Color.gray.opacity(0.6) : .red
     }
 }
