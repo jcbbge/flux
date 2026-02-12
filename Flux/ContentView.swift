@@ -62,6 +62,7 @@ struct HeartEmoji: Identifiable {
 struct ContentView: View {
     private let headerString = "\n\n"
     @State private var entries: [HumanEntry] = []
+    @State private var entryDictionary: [UUID: HumanEntry] = [:]
     @State private var text: String = ""  // Remove initial welcome text since we'll handle it in createNewEntry
     
     @State private var isFullscreen = false
@@ -305,20 +306,31 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                 // Read file contents for preview
                 do {
                     let content = try String(contentsOf: fileURL, encoding: .utf8)
-                    // Read only first 200 bytes for preview (partial read optimization)
-                    let preview: String
-                    if content.count > 200 {
-                        let endIndex = content.index(content.startIndex, offsetBy: 200)
-                        let partialContent = String(content[..<endIndex])
-                        preview = partialContent
-                            .replacingOccurrences(of: "\n", with: " ")
-                            .trimmingCharacters(in: .whitespacesAndNewlines)
-                    } else {
-                        preview = content
-                            .replacingOccurrences(of: "\n", with: " ")
-                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                    
+                    // Single-pass preview generation: extract first 200 chars, replace newlines, truncate
+                    let maxPreviewChars = 200
+                    let maxDisplayChars = 30
+                    let previewEnd = min(content.count, maxPreviewChars)
+                    let partialContent = previewEnd < content.count 
+                        ? String(content.prefix(previewEnd))
+                        : content
+                    
+                    // Single pass: replace newlines, trim, truncate
+                    var processed = partialContent
+                    var result = ""
+                    result.reserveCapacity(min(processed.count, maxDisplayChars + 3))
+                    
+                    for char in processed {
+                        if result.count >= maxDisplayChars {
+                            result.append("...")
+                            break
+                        }
+                        result.append(char == "\n" ? " " : char)
                     }
-                    let truncated = preview.isEmpty ? "" : (preview.count > 30 ? String(preview.prefix(30)) + "..." : preview)
+                    
+                    // Trim leading/trailing whitespace in-place
+                    let truncated = result.trimmingCharacters(in: .whitespacesAndNewlines)
+                    
                     // Format display date
                     let displayDate = DateFormatterCache.shared.string(from: fileDate, format: "MMM d")
                     
@@ -327,7 +339,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                             id: uuid,
                             date: displayDate,
                             filename: filename,
-                            previewText: truncated
+                            previewText: truncated.isEmpty ? "" : truncated
                         ),
                         date: fileDate,
                         content: content  // Store the full content to check for welcome message
@@ -342,6 +354,9 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
             entries = entriesWithDates
                 .sorted { $0.date > $1.date }  // Sort by actual date from filename
                 .map { $0.entry }
+            
+            // Build O(1) lookup dictionary
+            entryDictionary = Dictionary(uniqueKeysWithValues: entries.map { ($0.id, $0) })
             
             print("Successfully loaded and sorted \(entries.count) entries")
             
@@ -1025,9 +1040,9 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                     if selectedEntryId != entry.id {
                                         // Save current entry before switching
                                         if let currentId = selectedEntryId,
-                                           let currentEntry = entries.first(where: { $0.id == currentId }) {
-                                        // Immediate save on context switch
-                                        pendingSaveTimer?.invalidate()
+                                           let currentEntry = entryDictionary[currentId] {
+                                            // Immediate save on context switch
+                                            pendingSaveTimer?.invalidate()
                                             saveEntry(entry: currentEntry)
                                         }
                                         
@@ -1140,7 +1155,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
         }
         .onChange(of: text) { _ in
             if let currentId = selectedEntryId,
-               let currentEntry = entries.first(where: { $0.id == currentId }) {
+               let currentEntry = entryDictionary[currentId] {
                 // Debounced save: cancel pending, schedule new
                 pendingSaveTimer?.invalidate()
                 pendingSaveTimer = Timer.scheduledTimer(withTimeInterval: saveDebounceInterval, repeats: false) { _ in
@@ -1183,14 +1198,25 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
     }
     
     private func updatePreviewFromMemory(for entry: HumanEntry, content: String) {
-        let preview = content
-            .replacingOccurrences(of: "\n", with: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let truncated = preview.isEmpty ? "" : (preview.count > 30 ? String(preview.prefix(30)) + "..." : preview)
+        // Single-pass preview generation
+        let maxDisplayChars = 30
+        var result = ""
+        result.reserveCapacity(maxDisplayChars + 3)
         
-        // Find and update the entry in the entries array
+        for char in content {
+            if result.count >= maxDisplayChars {
+                result.append("...")
+                break
+            }
+            result.append(char == "\n" ? " " : char)
+        }
+        
+        let truncated = result.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Update both array and dictionary
         if let index = entries.firstIndex(where: { $0.id == entry.id }) {
-            entries[index].previewText = truncated
+            entries[index].previewText = truncated.isEmpty ? "" : truncated
+            entryDictionary[entry.id] = entries[index]
         }
     }
     
@@ -1226,6 +1252,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
     private func createNewEntry() {
         let newEntry = HumanEntry.createNew()
         entries.insert(newEntry, at: 0) // Add to the beginning
+        entryDictionary[newEntry.id] = newEntry
         selectedEntryId = newEntry.id
         
         // If this is the first entry (entries was empty before adding this one)
@@ -1288,9 +1315,10 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
             try fileManager.removeItem(at: fileURL)
             print("Successfully deleted file: \(entry.filename)")
             
-            // Remove the entry from the entries array
+            // Remove the entry from the array and dictionary
             if let index = entries.firstIndex(where: { $0.id == entry.id }) {
                 entries.remove(at: index)
+                entryDictionary.removeValue(forKey: entry.id)
                 
                 // If the deleted entry was selected, select the first entry or create a new one
                 if selectedEntryId == entry.id {
