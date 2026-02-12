@@ -78,7 +78,7 @@ class FluxCategorizerService {
         return []
     }
     
-    private func callCategorizer(with prompt: String, type: EnrichmentType) async -> [String: Any]? {
+    func callCategorizer(with prompt: String, type: EnrichmentType) async -> [String: Any]? {
         var request = URLRequest(url: ollamaURL)
         request.httpMethod = "POST"
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -142,6 +142,7 @@ enum EnrichmentType: String {
     case enrich = "enrich"
     case propagate = "propagate"
     case insights = "insights"
+    case report = "report"
 }
 
 // MARK: - Extension for common words (stub for similarity)

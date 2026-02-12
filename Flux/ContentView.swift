@@ -297,7 +297,6 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                 }
                 
                 // Parse the date string
-                let dateString = String(filename[dateMatch].dropFirst().dropLast())
                 guard let fileDate = DateFormatterCache.shared.date(from: dateString, format: "yyyy-MM-dd-HH-mm-ss") else {
                     print("Failed to parse date from filename: \(filename)")
                     return nil

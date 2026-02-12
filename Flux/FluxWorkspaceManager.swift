@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import AppKit
 
 class FluxWorkspaceManager: ObservableObject {
     @Published var activeProject: String?
@@ -66,13 +67,16 @@ class FluxWorkspaceManager: ObservableObject {
         
         if FileManager.default.fileExists(atPath: reportURL.path) {
             // Load existing
-            if let reportEntry = FluxEntry.parse(from: reportURL) {
-                // Update if stale (e.g., >1 day)
-                if Date() > Calendar.current.date(byAdding: .day, value: 1, to: extractDate(from: reportEntry.filename)!) {
-                    await updateReport(&reportEntry, from: projectURL)
-                }
-                return
+            if let existingEntry = FluxEntry.parse(from: reportURL),
+               let entryDate = extractDate(from: existingEntry.filename),
+               let nextDay = Calendar.current.date(byAdding: .day, value: 1, to: entryDate),
+               Date() > nextDay {
+                // Stale report - regenerate
+                let updatedEntry = await regenerateReport(for: existingEntry, projectURL: projectURL)
+                let fullContent = updatedEntry.embedMeta(updatedEntry.fluxMeta ?? FluxMeta(fluxType: "report"))
+                try? fullContent.write(to: reportURL, atomically: true, encoding: .utf8)
             }
+            return
         }
         
         // Generate new
@@ -82,7 +86,7 @@ class FluxWorkspaceManager: ObservableObject {
         let logs = try? FileManager.default.contentsOfDirectory(at: projectURL, includingPropertiesForKeys: nil)
             .filter { $0.pathExtension == "log" || $0.lastPathComponent.hasPrefix("session") }
             .prefix(5)  // High-level
-        let commitOutput = bashGitLog(projectPath: dir.appendingPathComponent("\(project)"))
+        let commitOutput = bashGitLog(projectPath: homeURL.appendingPathComponent(project, isDirectory: true))
         
         let prompt = """
         Per /Users/jcbbge/spacely/workspace/WORKSPACE.md: Generate high-level fluxReport MD.
@@ -101,14 +105,30 @@ class FluxWorkspaceManager: ObservableObject {
         }
     }
     
-    private func updateReport(_ entry: inout FluxEntry, from projectURL: URL) async {
-        // Re-gen content
-        let newContent = await generateReportContent(prompt: "Update high-level report from [projectURL] recent changes.")
-        entry.content = newContent
-        if let updatedMeta = await categorizer.suggestFluxInsights(entry) {
-            entry.insights = updatedMeta.insights
-        }
-        try? entry.embedMeta(entry.fluxMeta ?? FluxMeta(fluxType: "report")).write(to: entry.filename, atomically: true, encoding: .utf8)
+    private func regenerateReport(for entry: FluxEntry, projectURL: URL) async -> FluxEntry {
+        let newContent = await generateReportContent(prompt: "Update high-level report from \(projectURL.path) recent changes.")
+        let insights = await categorizer.suggestFluxInsights(entry)
+        
+        // Create updated meta with new insights
+        let updatedMeta = FluxMeta(
+            fluxTitle: entry.fluxMeta?.fluxTitle ?? "\(activeProject ?? "Project") Status",
+            fluxType: entry.fluxMeta?.fluxType ?? "report",
+            category: entry.fluxMeta?.category,
+            summary: entry.fluxMeta?.summary,
+            tags: entry.fluxMeta?.tags ?? [],
+            links: entry.fluxMeta?.links ?? [],
+            insights: insights,
+            embedding: entry.fluxMeta?.embedding
+        )
+        
+        // Return new immutable entry
+        return FluxEntry(
+            id: entry.id,
+            date: entry.date,
+            filename: entry.filename,
+            content: newContent,
+            fluxMeta: updatedMeta
+        )
     }
     
     private func generateReportContent(prompt: String) async -> String {
@@ -141,12 +161,16 @@ class FluxWorkspaceManager: ObservableObject {
     }
     
     private func extractDate(from filename: String) -> Date? {
-        let range = filename.range(of: "(\\d{4}-\\d{2}-\\d{2})", options: .regularExpression)
-        if let match = range {
-            let dateString = String(filename[match])
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd"
-            return formatter.date(from: dateString)
+        // Direct extraction: look for yyyy-MM-dd pattern
+        // Try to extract from fluxReport-yyyy-MM-dd.md format
+        let components = filename.components(separatedBy: "-")
+        if components.count >= 3 {
+            // Find the date part (usually last 3 components before .md)
+            let datePart = components.suffix(3).joined(separator: "-")
+                .replacingOccurrences(of: ".md", with: "")
+            if datePart.count == 10 { // yyyy-MM-dd
+                return DateFormatterCache.shared.date(from: datePart, format: "yyyy-MM-dd")
+            }
         }
         return nil
     }
