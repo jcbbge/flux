@@ -2,7 +2,7 @@
 //  VersionInfo.swift
 //  Flux
 //
-//  Minimal git commit verification. No colors, no labels, no emojis.
+//  Minimal git commit verification. Indicator first: [-] hash or [✓] hash
 //
 
 import Foundation
@@ -54,7 +54,7 @@ struct VersionInfo {
         if result.repoCommit == nil {
             return "[?]"
         }
-        return result.isMatch ? "[✓]" : "[X]"
+        return result.isMatch ? "[✓]" : "[-]"
     }
 }
 
@@ -69,12 +69,12 @@ struct VersionInfoBar: View {
     
     var body: some View {
         HStack(spacing: 6) {
-            Text(VersionInfo.shortCommit)
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundColor(textColor)
-            
             Text(VersionInfo.statusIndicator)
                 .font(.system(size: 10))
+                .foregroundColor(textColor)
+            
+            Text(VersionInfo.shortCommit)
+                .font(.system(size: 10, design: .monospaced))
                 .foregroundColor(textColor)
             
             Spacer()

@@ -1,0 +1,20 @@
+#!/bin/bash
+#
+# Git post-commit hook
+# Auto-builds and installs Flux after every commit
+#
+# Install: cp scripts/post-commit .git/hooks/
+#
+
+cd /Users/jcbbge/flux
+
+echo ""
+echo "🔨 Auto-building Flux..."
+
+if make install 2>&1 | tail -5; then
+    echo ""
+    echo "✅ Flux updated. Click History to verify: [✓]"
+else
+    echo ""
+    echo "❌ Build failed. Run manually: make install"
+fi

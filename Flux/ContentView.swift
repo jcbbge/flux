@@ -993,19 +993,13 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                         NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: getDocumentsDirectory().path)
                     }) {
                         HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack(spacing: 4) {
-                                    Text("History")
-                                        .font(.system(size: 13))
-                                        .foregroundColor(isHoveringHistory ? textHoverColor : textColor)
-                                    Image(systemName: "arrow.up.right")
-                                        .font(.system(size: 10))
-                                        .foregroundColor(isHoveringHistory ? textHoverColor : textColor)
-                                }
-                                Text(getDocumentsDirectory().path)
+                            HStack(spacing: 4) {
+                                Text("Show in Finder")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(isHoveringHistory ? textHoverColor : textColor)
+                                Image(systemName: "arrow.up.right")
                                     .font(.system(size: 10))
-                                    .foregroundColor(.secondary)
-                                    .lineLimit(1)
+                                    .foregroundColor(isHoveringHistory ? textHoverColor : textColor)
                             }
                             Spacer()
                         }
@@ -1017,10 +1011,10 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                         isHoveringHistory = hovering
                     }
                     
-                    // Version info - minimal, consistent with sidebar style
+                    // Version info
                     VersionInfoBar()
                         .padding(.horizontal, 16)
-                        .padding(.bottom, 8)
+                        .padding(.vertical, 8)
                     Divider()
                     
                     // Entries List
