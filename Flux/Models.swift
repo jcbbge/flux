@@ -55,9 +55,10 @@ struct FluxEntry: Identifiable, Equatable {
         do {
             let content = try String(contentsOf: path, encoding: .utf8)
             let filename = path.lastPathComponent
-            let timestampMatch = filename.range(of: "^(\\d{4}-\\d{2}-\\d{2}-\\d{2}-\\d{2}-\\d{2})", options: .regularExpression)
-            guard let match = timestampMatch else { return nil }
-            let dateString = String(filename[match])
+            // Direct extraction: timestamp is first 19 chars (yyyy-MM-dd-HH-mm-ss)
+            let prefix = filename.prefix(19)
+            guard prefix.count == 19 && filename.contains("-") else { return nil }
+            let dateString = String(prefix)
             guard let date = DateFormatterCache.shared.date(from: dateString, format: "yyyy-MM-dd-HH-mm-ss") else { return nil }
             let displayDate = DateFormatterCache.shared.string(from: date, format: "MMM d")
             let uuid = UUID()
@@ -73,27 +74,36 @@ struct FluxEntry: Identifiable, Equatable {
     }
     
     static func parseFrontmatter(from content: String) -> FluxMeta? {
-        guard let range = content.range(of: "---\\n(.*?)(?=\\n---\\n|\\z)", options: .regularExpression, range: content.startIndex..<content.endIndex) else {
-            return nil
-        }
-        let yamlBlock = String(content[range])
-        // Simple YAML parse (key: value) - extend with Yams SPM if needed
+        // Check for frontmatter delimiters
+        guard content.hasPrefix("---\n") else { return nil }
+        
+        // Find the closing ---
+        let rest = content.dropFirst(4) // Skip "---\n"
+        guard let closeRange = rest.range(of: "\n---") else { return nil }
+        let yamlBlock = String(rest[..<closeRange.lowerBound])
+        
+        // Simple YAML parse (key: value)
         var meta = [String: Any]()
-        yamlBlock.components(separatedBy: .newlines).forEach { line in
+        yamlBlock.split(separator: "\n", omittingEmptySubsequences: false).forEach { line in
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if let colonRange = trimmed.range(of: "(.*?):\\s*(.*)", options: .regularExpression) {
-                let key = String(trimmed[colonRange.lowerBound..<trimmed[trimmed.index(colonRange.lowerBound, offsetBy: trimmed.distance(from: colonRange.lowerBound, to: colonRange.upperBound)) - 1]])
-                let value = String(trimmed[trimmed.index(colonRange.upperBound, offsetBy: 1)..<trimmed.endIndex])
-                // Parse value (basic: array or string)
-                if value.hasPrefix("[") && value.hasSuffix("]") {
-                    let tags = value.replacingOccurrences(of: "[", with: "").replacingOccurrences(of: "]", with: "").split(separator: ",").map { String($0.trimmingCharacters(in: .whitespaces)) }
-                    meta[key] = tags
-                } else if key == "links" {
-                    let links = value.split(separator: ",").map { String($0.trimmingCharacters(in: .whitespaces)).compactMap { UUID(uuidString: $0) } }
-                    meta[key] = links
-                } else {
-                    meta[key] = value
-                }
+            guard !trimmed.isEmpty, !trimmed.hasPrefix("#") else { return } // Skip empty/comment lines
+            
+            // Find first colon
+            guard let colonIndex = trimmed.firstIndex(of: ":") else { return }
+            let key = String(trimmed[..<colonIndex])
+            let valueStart = trimmed.index(after: colonIndex)
+            let value = String(trimmed[valueStart...]).trimmingCharacters(in: .whitespaces)
+            
+            // Parse value (basic: array or string)
+            if value.hasPrefix("[") && value.hasSuffix("]") {
+                let inner = value.dropFirst().dropLast()
+                let tags = inner.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                meta[key] = tags
+            } else if key == "links" {
+                let links = value.split(separator: ",").compactMap { UUID(uuidString: $0.trimmingCharacters(in: .whitespaces)) }
+                meta[key] = links
+            } else {
+                meta[key] = value
             }
         }
         // Build FluxMeta from parsed

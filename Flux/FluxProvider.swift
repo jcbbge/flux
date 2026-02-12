@@ -77,8 +77,10 @@ class FileFluxProvider: FluxProvider {
     }
     
     private func extractDate(from filename: String) -> Date {
-        let range = filename.range(of: "^(\\d{4}-\\d{2}-\\d{2}-\\d{2}-\\d{2}-\\d{2})", options: .regularExpression)
-        if let match = range, let dateString = DateFormatter.matchToDate(string: filename, range: match) {
+        // Direct string extraction: timestamp is first 19 chars (yyyy-MM-dd-HH-mm-ss)
+        let prefix = filename.prefix(19)
+        let dateString = String(prefix)
+        if prefix.count == 19 && dateString.contains("-") {
             return DateFormatterCache.shared.date(from: dateString, format: "yyyy-MM-dd-HH-mm-ss") ?? Date()
         }
         return Date()

@@ -283,10 +283,18 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                 print("Processing: \(filename)")
                 
                 // Extract UUID and date from filename - pattern [uuid]-[yyyy-MM-dd-HH-mm-ss].md
-                guard let uuidMatch = filename.range(of: "\\[(.*?)\\]", options: .regularExpression),
-                      let dateMatch = filename.range(of: "\\[(\\d{4}-\\d{2}-\\d{2}-\\d{2}-\\d{2}-\\d{2})\\]", options: .regularExpression),
-                      let uuid = UUID(uuidString: String(filename[uuidMatch].dropFirst().dropLast())) else {
+                // Direct string parsing (faster than regex)
+                guard let uuidStart = filename.firstIndex(of: "["),
+                      let uuidEnd = filename[uuidStart...].dropFirst().firstIndex(of: "]"),
+                      let dateStart = filename[uuidEnd...].dropFirst().firstIndex(of: "["),
+                      let dateEnd = filename[dateStart...].dropFirst().firstIndex(of: "]") else {
                     print("Failed to extract UUID or date from filename: \(filename)")
+                    return nil
+                }
+                let uuidString = String(filename[filename.index(after: uuidStart)..<uuidEnd])
+                let dateString = String(filename[filename.index(after: dateStart)..<dateEnd])
+                guard let uuid = UUID(uuidString: uuidString) else {
+                    print("Failed to parse UUID from filename: \(filename)")
                     return nil
                 }
                 
