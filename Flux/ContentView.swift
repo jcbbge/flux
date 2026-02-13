@@ -1832,12 +1832,6 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
         do {
             try contentToSave.write(to: fileURL, atomically: true, encoding: .utf8)
             print("Successfully saved entry: \(entry.filename)")
-            
-            // Update in-memory text with frontmatter
-            if text != contentToSave {
-                text = contentToSave
-            }
-            
             backupEntryFile(from: fileURL)
             
             // Update preview with summary or body
@@ -1889,7 +1883,10 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
         
         do {
             if fileManager.fileExists(atPath: fileURL.path) {
-                text = try String(contentsOf: fileURL, encoding: .utf8)
+                let fullContent = try String(contentsOf: fileURL, encoding: .utf8)
+                // Strip frontmatter - UI shows body only
+                let (_, bodyContent) = parseFrontmatter(from: fullContent)
+                text = bodyContent
                 print("Successfully loaded entry: \(entry.filename)")
             }
         } catch {
