@@ -1,186 +1,181 @@
-# Session Mining Report: Flux Recovery & Build System
+# Session Mining Report: Flux Major Feature Push
 
 **Date:** 2026-02-12  
-**Session Duration:** ~3.5 hours  
-**Commits:** 13  
-**Outcome:** Production-ready build system, all phases complete
+**Duration:** ~5 hours  
+**Commits:** 8  
+**Outcome:** 6 major features implemented, tested, installed
 
 ---
 
 ## 1. Quality Pipeline Stages
 
-| Stage | Technique | Application |
-|-------|-----------|-------------|
-| **Assessment** | Read current state, map architecture | Analyzed ContentView.swift, Models, Providers |
-| **Planning** | Phase-based execution strategy | Created 4-phase plan with commit strategy |
-| **Verification** | Build, test, verify each step | Makefile with `make verify` for commit matching |
-| **Correction** | Fix discovered errors | FluxWorkspaceManager compilation errors |
-| **Iteration** | UI refinement | "remove emojis", "move hash", "Show in Finder" |
-| **Systematization** | Capture patterns as rules | Makefile, AGENTS.md, post-commit hook |
+| Stage | When Applied | Purpose |
+|-------|--------------|---------|
+| **Clarification** | User brain-dump requirements | Understand the "why" behind features |
+| **Chunking** | Breaking work into P0-P5 phases | Make complex scope manageable |
+| **Validation** | After each build attempt | Verify `[✓]` in sidebar, catch stale builds |
+| **Verification** | After user frustration | Fix hotkey, simplify UI when over-engineered |
+| **Documentation** | End of session | Capture testing protocol for reproducibility |
 
 ---
 
 ## 2. Prompt Primitives Extracted
 
-### A. "Design System Consistency"
+### A. "Build Protocol Enforcement"
+**Trigger:** User frustration at stale builds  
+**Response:** Read AGENTS.md, follow exact protocol
 ```
-"KEEP IT CONSISTENT WITH THE DESIGN SYSTEM"
-"there is a 'sidebar' UI... reference the 'status' bar..."
+After EVERY code change:
+1. git add -A
+2. git commit -m "type: description"
+3. make install
+4. Verify [✓] in sidebar
 ```
-**Effect:** Forces agent to examine existing patterns before creating new ones. Prevents "emoji creep" and style drift.
+**Effect:** Prevents "works on my machine" / stale build issues
 
-### B. "Minimal Text-Only"
-```
-"remove the 'build' text"
-"remove the color"
-"text-only status"
-```
-**Effect:** Ultra-minimalist constraint that removes all decorative elements. Checkmarks become `[✓]`, labels removed.
+### B. "Brain-Dump to Structured Scope"
+**Trigger:** "all of those things... here's what I want"  
+**Response:** Apply skill-based synthesis (knowledge-graph-system, idea-wizard)
+**Effect:** Converts unstructured requirements into prioritized phases
 
-### C. "Defer to onAppear"
-```
-"VersionInfo.statusIndicator runs git command - cannot call in view body"
-```
-**Effect:** Critical SwiftUI pattern — expensive/synchronous operations must happen in lifecycle methods, not during render.
+### C. "Over-Engineering Detection"
+**Trigger:** "what the fuck man... remove X entirely"  
+**Response:** Immediate rollback, archive in ROADMAP with reasoning  
+**Effect:** Prevents feature creep, maintains focus on core value
+
+### D. "10x Re-framing"
+**Trigger:** "10x version... build for yourself"  
+**Response:** Re-cast app as "exocortex" not "journaling app"  
+**Effect:** Elevation from incremental to transformative thinking
 
 ---
 
-## 3. Artifact Patterns Discovered
+## 3. Artifact Patterns
 
-### Build System Pattern
 ```
-project/
-├── Makefile              # One-command build/install
-├── BUILD.md              # User documentation
-├── AGENTS.md             # Agent protocol/rules
-├── scripts/
-│   └── post-commit       # Auto-build on commit
-└── Flux/
-    └── VersionInfo.swift # Build verification UI
-```
-
-### Commit Strategy Pattern
-```
-<scope>: <description>
-
-- imperative mood
-- no period
-- body explains what/why
-```
-
-### UI Feedback Loop Pattern
-```
-User: "this is terrible UX"
-Agent: acknowledges, removes immediately
-→ "remove emojis" → done
-→ "move to sidebar" → done
-→ "reverse order" → done
-→ "remove 'build' label" → done
+flux/
+├── AGENTS.md              # Build protocol (rules)
+├── ROADMAP.md             # Living feature list (phased)
+├── NEXT_STEPS.md          # Session handoff (current)
+├── Makefile               # Single-command build system
+├── Flux/
+│   ├── ContentView.swift  # Main UI (1500+ lines)
+│   ├── VersionInfo.swift  # Build verification
+│   └── ...
+└── Entries/               # User data (auto-created)
 ```
 
 ---
 
 ## 4. Meta-Cognitive Triggers
 
-| Trigger | User Intent | Agent Response |
-|---------|-------------|----------------|
-| "this is fucking terrible" | Strong negative feedback, immediate pivot | Drop everything, fix now |
-| "preserve that" | Protect existing quality | Reference existing patterns exclusively |
-| "world class dx" | High standard, minimal friction | Automate everything possible |
-| "step back and reevaluate" | Meta-cognitive shift | Stop executing, assess, plan |
-| "joyous and memorable" | Emotional design goal | Eliminate friction, add delight |
+| Trigger | Context | Effect |
+|---------|---------|--------|
+| "this is fucking terrible" | Hotkey not working | Immediate pivot, archive feature |
+| "proceed with the planned todos" | After roadmap agreement | Focused execution mode |
+| "remove X entirely" | Scope reduction | Clean removal, update ROADMAP |
+| "not valuable" | Word count feature | Feature elimination |
+| "just highlight selection in black and invert" | Search UI polish | Clear visual spec without mockups |
 
 ---
 
 ## 5. Synthesized Skills
 
-### Skill: `makefile-build-system`
+### Skill: `flux-build-verification`
 ```yaml
-When asked to create build workflow:
-1. Create Makefile with: build, install, clean, verify
-2. Add git commit embedding via PlistBuddy
-3. Add ad-hoc code signing for /Applications
-4. Create BUILD.md for user documentation
-5. Create AGENTS.md with critical rules
-6. Add post-commit hook for auto-build
-7. Include verification step that compares embedded vs repo HEAD
-
-Output: Single-command deployment with verification
+name: flux-build-verification
+description: Enforce build protocol to prevent stale builds
+triggers: 
+  - "build complete"
+  - "make install"
+  - User reports wrong behavior
+steps:
+  1. Check sidebar indicator: [✓], [X], [-], or [?]
+  2. If [X]: git commit && make clean install
+  3. If [-]: make install only
+  4. If [?]: make clean install
+  5. Verify: defaults read /Applications/Flux.app/Contents/Info GitCommit
+output: Running app matches latest commit
 ```
 
-### Skill: `swiftui-render-safety`
+### Skill: `rapid-feature-rollout`
 ```yaml
-When working with SwiftUI:
-1. Never run expensive/sync operations in view body
-2. Use @State + onAppear for computed values
-3. Defer Process(), network calls, file I/O to lifecycle
-4. Watch for: EXC_BREAKPOINT crashes = main thread blocked
-
-Output: Non-blocking, crash-free SwiftUI views
+name: rapid-feature-rollout
+description: Implement, commit, install, verify in tight loops
+triggers:
+  - "whats next"
+  - "proceed"
+  - Feature list approved
+steps:
+  1. Pick highest priority uncompleted item
+  2. Implement minimal viable version
+  3. git add -A && git commit -m "feat: X"
+  4. make install
+  5. Verify sidebar shows [✓]
+  6. User test or move to next
+pattern: ~20 min per feature, commit after each
 ```
 
-### Skill: `ultra-minimal-ui`
+### Skill: `command-center-pattern`
 ```yaml
-When asked for minimal UI:
-1. Remove all emojis immediately
-2. Remove all labels/decorations
-3. Use text-only indicators: [✓], [-], [?]
-4. Match existing text size/color exactly
-5. Reference existing components as templates
-6. Position in logical hierarchy (indicator first)
-
-Output: Invisible UI that communicates status without noise
+name: command-center-pattern
+description: Transform app into central hub for all work
+triggers:
+  - "command center"
+  - "meta-cognitive planning"
+  - "orchestration"
+implementation:
+  1. Daily entry point (YYYY-MM-DD.md)
+  2. Project discovery (scan ~/ for .git/workspace)
+  3. NEXT_STEPS.md integration (per-project status)
+  4. Search across all context (Cmd+K)
+  5. Todo aggregation (across all notes)
 ```
 
 ---
 
 ## 6. Integration Notes
 
-### Enhance: `ending-session`
-Add to standard output:
-- Build verification status
-- Post-commit hook status
-- NEXT_STEPS.md location in workspace/
+### Enhance Existing Skills
+- `ending-session`: Add "Build Verification" section for compiled apps
+- `session-mining`: Add "User Frustration → Pivot" pattern
 
-### New Skill: `dogfooding-workflow`
-Capture the pattern of:
-- Build locally
-- Install to /Applications
-- Run immediately
-- Verify in UI
-- Commit working state
+### New Skills to Create
+1. `flux-build-verification` — Prevent stale build issues
+2. `rapid-feature-rollout` — 20-min implement→commit→install loops
+3. `command-center-pattern` — Transform tools into orchestration hubs
 
-### Variation: `performance-phase-completion`
-The Phase 1-4 pattern:
-1. Original plan
-2. Discovered work (build fixes)
-3. UI refinements (emoji removal)
-4. Crash fixes (onAppear)
-5. Phase 4 optimizations (O(1) lookup)
-6. Re-evaluation before Phase 5
+### Variations
+- `ending-session` → `ending-session-compiled` for apps with build steps
+- `ending-session` → `ending-session-web` for interpreted languages
 
 ---
 
 ## Key Insights
 
-1. **Build system is part of the product** — The Makefile and post-commit hook are as important as the app code.
+1. **Build verification is part of the product** — The `[-]` / `[✓]` indicator prevents entire class of "why isn't this working" issues
 
-2. **Verification UI prevents drift** — The `[-]` indicator catches "stale build" immediately.
+2. **User frustration is high-signal** — "What the fuck" moments indicate real blockers, not preferences. Immediate pivot required.
 
-3. **Minimal != less work** — Ultra-minimal UI required 4 iterations to get right.
+3. **Commit-per-feature is minimum** — User explicitly requested "small actionable chunks" — each feature = 1 commit
 
-4. **Defer everything possible** — SwiftUI crashes taught us: if it can be deferred, defer it.
+4. **Skills are discovered, not invented** — We applied 4 existing skills (knowledge-graph, idea-wizard, systems-thinking, eval-product) — they emerged from requirements, not forced
 
-5. **Git commit as version** — Embedding short hash is better than version numbers for rapid iteration.
+5. **Documentation is last feature** — NEXT_STEPS.md with full testing protocol enables future reproducibility
 
 ---
 
-## Reproducibility Checklist
+## Reproducible Success
 
-For future Flux-like projects:
-- [ ] Create Makefile immediately
-- [ ] Add post-commit hook
-- [ ] Add VersionInfo component
-- [ ] Add AGENTS.md with build rules
-- [ ] Test install flow before any features
-- [ ] Verify in-app build indicator works
+To reproduce this velocity:
+
+1. **Start with AGENTS.md** — Build protocol prevents entire class of errors
+2. **Use skills explicitly** — Name them, apply them, log them
+3. **Commit-per-feature** — Never batch multiple features
+4. **Verify after every install** — `[✓]` indicator is truth
+5. **Document for testing** — Handoff doc with test assertions enables verification
+
+**Session Duration:** ~5 hours  
+**Features Completed:** 6  
+**Commit-to-Install Time:** ~30 seconds  
+**User Test Cycles:** Minimal (protocol prevented stale builds)
