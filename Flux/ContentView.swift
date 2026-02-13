@@ -823,6 +823,17 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                 return nil // Consume the event
                             }
                             
+                            // Check for Cmd+Delete (keycode 51 with Command)
+                            if hasCommand && event.keyCode == 51 {
+                                DispatchQueue.main.async {
+                                    if let currentId = selectedEntryId,
+                                       let currentEntry = entryDictionary[currentId] {
+                                        deleteEntry(entry: currentEntry)
+                                    }
+                                }
+                                return nil // Consume the event
+                            }
+                            
                             // Check if backspace is disabled and the key is delete/backspace
                             if backspaceDisabled && (event.keyCode == 51 || event.keyCode == 117) {
                                 // Block the backspace/delete key
@@ -1942,18 +1953,39 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
     }
     
     private func deleteEntry(entry: HumanEntry) {
-        // Delete the file from the filesystem
         let documentsDirectory = getDocumentsDirectory()
         let fileURL = documentsDirectory.appendingPathComponent(entry.filename)
         
+        // Create trash directory if it doesn't exist
+        let trashDirectory = documentsDirectory.appendingPathComponent(".trash")
+        if !fileManager.fileExists(atPath: trashDirectory.path) {
+            do {
+                try fileManager.createDirectory(at: trashDirectory, withIntermediateDirectories: true)
+            } catch {
+                print("Error creating trash directory: \(error)")
+                return
+            }
+        }
+        
+        // Move to trash instead of deleting
+        let trashURL = trashDirectory.appendingPathComponent(entry.filename)
+        
         do {
-            try fileManager.removeItem(at: fileURL)
-            print("Successfully deleted file: \(entry.filename)")
+            // If file already exists in trash, remove it first
+            if fileManager.fileExists(atPath: trashURL.path) {
+                try fileManager.removeItem(at: trashURL)
+            }
+            
+            try fileManager.moveItem(at: fileURL, to: trashURL)
+            print("Successfully moved to trash: \(entry.filename)")
             
             // Remove the entry from the array and dictionary
             if let index = entries.firstIndex(where: { $0.id == entry.id }) {
                 entries.remove(at: index)
                 entryDictionary.removeValue(forKey: entry.id)
+                
+                // Remove any todos from this entry
+                todos.removeAll { $0.entryId == entry.id }
                 
                 // If the deleted entry was selected, select the first entry or create a new one
                 if selectedEntryId == entry.id {
@@ -1966,7 +1998,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                 }
             }
         } catch {
-            print("Error deleting file: \(error)")
+            print("Error moving to trash: \(error)")
         }
     }
     

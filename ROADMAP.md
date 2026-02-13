@@ -196,8 +196,6 @@ Flux is **not** a journaling app. Flux is:
 
 ### 5.3 Export
 - Single entry → PDF, Markdown
-- Multiple entries → combined export
-- Include/exclude metadata
 
 ### 5.4 Preferences
 - AI enrichment on/off
