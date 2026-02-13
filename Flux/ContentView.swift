@@ -92,7 +92,6 @@ struct ContentView: View {
     @State private var showingSidebar = false  // Add this state variable
     @State private var hoveredTrashId: UUID? = nil
     @State private var hoveredExportId: UUID? = nil
-    @State private var placeholderText: String = ""  // Add this line
     @State private var isHoveringNewEntry = false
     @State private var isHoveringClock = false
     @State private var isHoveringHistory = false
@@ -117,16 +116,6 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
 @StateObject private var workspaceManager = FluxWorkspaceManager()
     let standardFonts = ["Lato-Regular", "Arial", ".AppleSystemUIFont", "Times New Roman"]
     let fontSizes: [CGFloat] = [16, 18, 20, 22, 24, 26]
-    let placeholderOptions = [
-        "\n\nBegin writing",
-        "\n\nPick a thought and go",
-        "\n\nStart typing",
-        "\n\nWhat's on your mind",
-        "\n\nJust start",
-        "\n\nType your first thought",
-        "\n\nStart with one sentence",
-        "\n\nJust say it"
-    ]
     
     // Add file manager and save timer
     private let fileManager = FileManager.default
@@ -316,7 +305,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                         : content
                     
                     // Single pass: replace newlines, trim, truncate
-                    var processed = partialContent
+                    let processed = partialContent
                     var result = ""
                     result.reserveCapacity(min(processed.count, maxDisplayChars + 3))
                     
@@ -457,11 +446,6 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
         return "\(Int(fontSize))px"
     }
     
-    var placeholderOffset: CGFloat {
-        // Instead of using calculated line height, use a simple offset
-        return fontSize / 2
-    }
-    
     // Add a color utility computed property
     var popoverBackgroundColor: Color {
         return colorScheme == .light ? Color(NSColor.controlBackgroundColor) : Color(NSColor.darkGray)
@@ -471,9 +455,13 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
         return colorScheme == .light ? Color.primary : Color.white
     }
 
+    var todayHeaderText: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE, MMMM d, yyyy"
+        return formatter.string(from: Date())
+    }
     
     var body: some View {
-        let buttonBackground = colorScheme == .light ? Color.white : Color.black
         let navHeight: CGFloat = 68
         let textColor = colorScheme == .light ? Color.gray : Color.gray.opacity(0.8)
         let textHoverColor = colorScheme == .light ? Color.black : Color.white
@@ -485,6 +473,16 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                     .ignoresSafeArea()
                 
               
+                // Content with date header
+                VStack(spacing: 0) {
+                    // Date header
+                    Text(todayHeaderText)
+                        .font(.system(size: 13, weight: .medium, design: .default))
+                        .foregroundColor(colorScheme == .light ? .gray : .gray.opacity(0.8))
+                        .padding(.top, 20)
+                        .padding(.bottom, 10)
+                    
+                    // Text editor
                     TextEditor(text: Binding(
                         get: { text },
                         set: { newValue in
@@ -510,7 +508,6 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                     .ignoresSafeArea()
                     .colorScheme(colorScheme)
                     .onAppear {
-                        placeholderText = placeholderOptions.randomElement() ?? "\n\nBegin writing"
                         // Removed findSubview code which was causing errors
 
                         // Add keyboard monitor for backspace/delete keys
@@ -523,21 +520,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                             return event
                         }
                     }
-                    .overlay(
-                        ZStack(alignment: .topLeading) {
-                            if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                Text(placeholderText)
-                                    .font(.custom(selectedFont, size: fontSize))
-                                    .foregroundColor(colorScheme == .light ? .gray.opacity(0.5) : .gray.opacity(0.6))
-                                    // .padding(.top, 8)
-                                    // .padding(.leading, 8)
-                                    .allowsHitTesting(false)
-                                    .offset(x: 5, y: placeholderOffset)
-                            }
-                        }, alignment: .topLeading
-                    )
-                    
-                
+                }
                 VStack {
                     Spacer()
                     HStack {
@@ -859,8 +842,8 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                 .cornerRadius(8)
                                 .shadow(color: Color.black.opacity(0.1), radius: 4, y: 2)
                                 // Reset copied state when popover dismisses
-                                .onChange(of: showingChatMenu) { newValue in
-                                    if !newValue {
+                                .onChange(of: showingChatMenu) {
+                                    if !showingChatMenu {
                                         didCopyPrompt = false
                                     }
                                 }
@@ -1153,7 +1136,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
             showingSidebar = false  // Hide sidebar by default
             loadExistingEntries()
         }
-        .onChange(of: text) { _ in
+        .onChange(of: text) {
             if let currentId = selectedEntryId,
                let currentEntry = entryDictionary[currentId] {
                 // Debounced save: cancel pending, schedule new
@@ -1269,8 +1252,6 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
         } else {
             // Regular new entry starts with newlines
             text = "\n\n"
-            // Randomize placeholder text for new entry
-            placeholderText = placeholderOptions.randomElement() ?? "\n\nBegin writing"
             // Save the empty entry
             saveEntry(entry: newEntry)
         }

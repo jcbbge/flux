@@ -169,4 +169,3 @@ enum FluxScope: String {
 }
 
 // MARK: - Equatable for UUID array
-extension UUID: Hashable {}  // Already conforms, but explicit for clarity
