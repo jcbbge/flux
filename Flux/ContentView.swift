@@ -489,6 +489,54 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
         }
     }
     
+    // MARK: - Project NEXT_STEPS.md Integration
+    private func loadProjectNextSteps(project: Project) {
+        let nextStepsPath = "\(project.path)/workspace/NEXT_STEPS.md"
+        let fileURL = URL(fileURLWithPath: nextStepsPath)
+        
+        // Save current entry before switching
+        if let currentId = selectedEntryId,
+           let currentEntry = entryDictionary[currentId] {
+            pendingSaveTimer?.invalidate()
+            saveEntry(entry: currentEntry)
+        }
+        
+        // Clear entry selection to indicate we're viewing a project file
+        selectedEntryId = nil
+        
+        do {
+            if fileManager.fileExists(atPath: nextStepsPath) {
+                text = try String(contentsOf: fileURL, encoding: .utf8)
+                print("Loaded NEXT_STEPS.md for project: \(project.name)")
+            } else {
+                // Create default NEXT_STEPS.md content if it doesn't exist
+                let defaultContent = """
+# Next Steps: \(project.name)
+
+## Current State
+
+
+## Next Actions
+- [ ] 
+
+## Blockers
+
+
+## Decisions Needed
+
+
+"""
+                text = defaultContent
+                // Save the default content
+                try defaultContent.write(to: fileURL, atomically: true, encoding: .utf8)
+                print("Created default NEXT_STEPS.md for project: \(project.name)")
+            }
+        } catch {
+            print("Error loading/creating NEXT_STEPS.md: \(error)")
+            text = "\n\nError loading project file."
+        }
+    }
+    
     var randomButtonTitle: String {
         return currentRandomFont.isEmpty ? "Random" : "Random [\(currentRandomFont)]"
     }
@@ -532,6 +580,13 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
     var todayHeaderText: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEEE, MMMM d, yyyy"
+        
+        // Show project name if a project is selected
+        if let projectPath = selectedProjectPath,
+           let project = projects.first(where: { $0.path == projectPath }) {
+            return "📁 \(project.name)"
+        }
+        
         return formatter.string(from: Date())
     }
     
@@ -1073,8 +1128,8 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                             ForEach(projects.prefix(5)) { project in
                                 Button(action: {
                                     selectedProjectPath = project.path
-                                    // Future: Load project's NEXT_STEPS.md
                                     print("Selected project: \(project.name)")
+                                    loadProjectNextSteps(project: project)
                                 }) {
                                     HStack {
                                         HStack(spacing: 4) {
@@ -1273,6 +1328,19 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                 pendingSaveTimer?.invalidate()
                 pendingSaveTimer = Timer.scheduledTimer(withTimeInterval: saveDebounceInterval, repeats: false) { _ in
                     saveEntry(entry: currentEntry)
+                }
+            } else if let projectPath = selectedProjectPath {
+                // Save project NEXT_STEPS.md
+                pendingSaveTimer?.invalidate()
+                pendingSaveTimer = Timer.scheduledTimer(withTimeInterval: saveDebounceInterval, repeats: false) { _ in
+                    let nextStepsPath = "\(projectPath)/workspace/NEXT_STEPS.md"
+                    let fileURL = URL(fileURLWithPath: nextStepsPath)
+                    do {
+                        try text.write(to: fileURL, atomically: true, encoding: .utf8)
+                        print("Saved NEXT_STEPS.md for project")
+                    } catch {
+                        print("Error saving NEXT_STEPS.md: \(error)")
+                    }
                 }
             }
         }
