@@ -1207,12 +1207,88 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
         let documentsDirectory = getDocumentsDirectory()
         let fileURL = documentsDirectory.appendingPathComponent(entry.filename)
         
+        // Parse existing frontmatter
+        let (existingMetadata, bodyContent) = parseFrontmatter(from: text)
+        
+        // Build metadata
+        var metadata: [String: String] = [:]
+        
+        // Preserve created date or set new
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        let nowString = dateFormatter.string(from: Date())
+        
+        if let created = existingMetadata["created"] {
+            metadata["created"] = created
+        } else {
+            metadata["created"] = nowString
+        }
+        metadata["modified"] = nowString
+        
+        // Extract tags
+        let extractedTags = extractTags(from: bodyContent)
+        if !extractedTags.isEmpty {
+            metadata["tags"] = extractedTags.joined(separator: ", ")
+        }
+        
+        // Preserve existing summary if any
+        if let existingSummary = existingMetadata["summary"] {
+            metadata["summary"] = existingSummary
+        }
+        
+        // Generate new content to save
+        let frontmatter = generateFrontmatter(metadata: metadata)
+        let contentToSave = frontmatter.isEmpty ? bodyContent : frontmatter + "\n\n" + bodyContent
+        
         do {
-            try text.write(to: fileURL, atomically: true, encoding: .utf8)
+            try contentToSave.write(to: fileURL, atomically: true, encoding: .utf8)
             print("Successfully saved entry: \(entry.filename)")
+            
+            // Update in-memory text with frontmatter
+            if text != contentToSave {
+                text = contentToSave
+            }
+            
             backupEntryFile(from: fileURL)
-            // Direct preview update from in-memory text (no file re-read)
-            updatePreviewFromMemory(for: entry, content: text)
+            
+            // Update preview with summary or body
+            if let summary = metadata["summary"] {
+                updatePreviewFromMemory(for: entry, content: summary)
+            } else {
+                updatePreviewFromMemory(for: entry, content: bodyContent)
+            }
+            
+            // Trigger Ollama summarization in background
+            generateSummary(for: contentToSave) { summary in
+                guard let summary = summary else { return }
+                
+                // Update metadata with summary
+                var updatedMetadata = metadata
+                updatedMetadata["summary"] = summary
+                
+                // Regenerate file with summary
+                let newFrontmatter = generateFrontmatter(metadata: updatedMetadata)
+                let newContent = newFrontmatter + "\n\n" + bodyContent
+                
+                do {
+                    try newContent.write(to: fileURL, atomically: true, encoding: .utf8)
+                    print("Updated entry with AI summary: \(entry.filename)")
+                    
+                    // Note: Can't update self.text here due to struct semantics
+                    // The summary will show on next load or sidebar refresh
+                    
+                    // Update preview
+                    DispatchQueue.main.async {
+                        // Reload entry to show summary
+                        if let index = entries.firstIndex(where: { $0.id == entry.id }) {
+                            entries[index].previewText = summary
+                            entryDictionary[entry.id] = entries[index]
+                        }
+                    }
+                } catch {
+                    print("Error saving summary: \(error)")
+                }
+            }
         } catch {
             print("Error saving entry: \(error)")
         }
@@ -1492,6 +1568,138 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
         pdfContext.closePDF()
         
         return pdfData as Data
+    }
+    
+    // MARK: - Ollama Summarization
+    
+    /// Generates a one-line summary of the entry content using local Ollama
+    private func generateSummary(for content: String, completion: @escaping (String?) -> Void) {
+        // Strip frontmatter for summarization
+        let (_, bodyContent) = parseFrontmatter(from: content)
+        
+        // Skip if content is too short
+        let trimmedContent = bodyContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedContent.count < 50 {
+            completion(nil)
+            return
+        }
+        
+        // Truncate if too long
+        let maxChars = 2000
+        let textToSummarize = trimmedContent.count > maxChars 
+            ? String(trimmedContent.prefix(maxChars)) + "..."
+            : trimmedContent
+        
+        // Ollama API request
+        let prompt = "Summarize the following text in one concise sentence (max 10 words):\n\n\(textToSummarize)"
+        
+        let requestBody: [String: Any] = [
+            "model": "llama3.2",
+            "prompt": prompt,
+            "stream": false,
+            "options": [
+                "temperature": 0.3,
+                "num_predict": 50
+            ]
+        ]
+        
+        guard let url = URL(string: "http://localhost:11434/api/generate"),
+              let jsonData = try? JSONSerialization.data(withJSONObject: requestBody) else {
+            completion(nil)
+            return
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.httpBody = jsonData
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        // Async call
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            guard let data = data, error == nil else {
+                print("Ollama request failed: \(error?.localizedDescription ?? "unknown error")")
+                completion(nil)
+                return
+            }
+            
+            // Parse response
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let response = json["response"] as? String {
+                let summary = response.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .replacingOccurrences(of: "\n", with: " ")
+                completion(summary.isEmpty ? nil : summary)
+            } else {
+                completion(nil)
+            }
+        }.resume()
+    }
+    
+    // MARK: - Frontmatter Helpers
+    
+    /// Parses existing YAML frontmatter from content
+    private func parseFrontmatter(from content: String) -> (metadata: [String: String], body: String) {
+        let lines = content.components(separatedBy: .newlines)
+        var metadata: [String: String] = [:]
+        var bodyStartIndex = 0
+        
+        // Check for frontmatter delimiter
+        if lines.first?.trimmingCharacters(in: .whitespaces) == "---" {
+            // Find closing delimiter
+            if let closeIndex = lines.dropFirst().firstIndex(where: { $0.trimmingCharacters(in: .whitespaces) == "---" }) {
+                // Parse metadata lines between delimiters
+                let metadataLines = lines[1..<closeIndex]
+                for line in metadataLines {
+                    let trimmed = line.trimmingCharacters(in: .whitespaces)
+                    if let colonIndex = trimmed.firstIndex(of: ":") {
+                        let key = String(trimmed[..<colonIndex]).trimmingCharacters(in: .whitespaces)
+                        let value = String(trimmed[trimmed.index(after: colonIndex)...]).trimmingCharacters(in: .whitespaces)
+                        metadata[key] = value
+                    }
+                }
+                bodyStartIndex = closeIndex + 1
+            }
+        }
+        
+        let body = lines[bodyStartIndex...].joined(separator: "\n")
+        return (metadata, body)
+    }
+    
+    /// Generates YAML frontmatter from metadata
+    private func generateFrontmatter(metadata: [String: String]) -> String {
+        guard !metadata.isEmpty else { return "" }
+        
+        var lines = ["---"]
+        for (key, value) in metadata.sorted(by: { $0.key < $1.key }) {
+            // Handle array values (tags)
+            if key == "tags" && value.contains(",") {
+                lines.append("\(key):")
+                let tags = value.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                for tag in tags {
+                    lines.append("  - \(tag)")
+                }
+            } else {
+                lines.append("\(key): \(value)")
+            }
+        }
+        lines.append("---")
+        return lines.joined(separator: "\n")
+    }
+    
+    /// Extracts inline tags from text (e.g., @todo, @decision, @idea)
+    private func extractTags(from content: String) -> [String] {
+        let tagPattern = "@(\\w+)"
+        let regex = try? NSRegularExpression(pattern: tagPattern, options: [])
+        let range = NSRange(content.startIndex..., in: content)
+        
+        let matches = regex?.matches(in: content, options: [], range: range) ?? []
+        let tags = matches.compactMap { match -> String? in
+            guard let range = Range(match.range(at: 1), in: content) else { return nil }
+            let tag = String(content[range])
+            // Filter to known tags only
+            return ["todo", "decision", "idea", "question", "note", "work", "personal"].contains(tag) ? tag : nil
+        }
+        
+        return Array(Set(tags)) // Remove duplicates
     }
 }
 
