@@ -66,6 +66,15 @@ struct Project: Identifiable {
     }
 }
 
+// MARK: - Search Result Model
+struct SearchResult: Identifiable {
+    let id = UUID()
+    let entry: HumanEntry
+    let filename: String
+    let preview: String
+    let matchRange: Range<String.Index>?
+}
+
 struct HeartEmoji: Identifiable {
     let id = UUID()
     var position: CGPoint
@@ -79,6 +88,10 @@ struct ContentView: View {
     @State private var projects: [Project] = []
     @State private var selectedProjectPath: String? = nil
     @State private var text: String = ""  // Remove initial welcome text since we'll handle it in createNewEntry
+    @State private var isSearchMode: Bool = false
+    @State private var searchQuery: String = ""
+    @State private var searchResults: [SearchResult] = []
+    @State private var selectedSearchIndex: Int = 0
     
     @State private var isFullscreen = false
     @State private var selectedFont: String = "Lato-Regular"
@@ -590,6 +603,106 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
         return formatter.string(from: Date())
     }
     
+    var searchView: some View {
+        VStack(spacing: 0) {
+            // Search input
+            HStack {
+                TextField("Search...", text: $searchQuery)
+                    .font(.system(size: 16))
+                    .textFieldStyle(PlainTextFieldStyle())
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+                    .onChange(of: searchQuery) {
+                        performSearch()
+                    }
+                
+                if !searchQuery.isEmpty {
+                    Button(action: {
+                        searchQuery = ""
+                        performSearch()
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.gray)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .padding(.trailing, 16)
+                }
+            }
+            .background(Color(colorScheme == .light ? .white : Color.black))
+            
+            Divider()
+            
+            // Results count
+            HStack {
+                Text("\(searchResults.count) results")
+                    .font(.system(size: 11))
+                    .foregroundColor(.gray)
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            
+            // Search results
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(searchResults.enumerated()), id: \.element.id) { index, result in
+                        Button(action: {
+                            selectSearchResult(result)
+                        }) {
+                            HStack(alignment: .top, spacing: 12) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    // Filename
+                                    Text(result.filename)
+                                        .font(.system(size: 12, weight: .medium))
+                                        .lineLimit(1)
+                                    
+                                    // Preview with match
+                                    if !result.preview.isEmpty {
+                                        Text(result.preview)
+                                            .font(.system(size: 11))
+                                            .foregroundColor(.gray)
+                                            .lineLimit(2)
+                                    }
+                                }
+                                .padding(.vertical, 10)
+                                .padding(.horizontal, 16)
+                                
+                                Spacer()
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(
+                                selectedSearchIndex == index
+                                    ? (colorScheme == .light ? Color.black : Color.white)
+                                    : Color.clear
+                            )
+                            .foregroundColor(
+                                selectedSearchIndex == index
+                                    ? (colorScheme == .light ? Color.white : Color.black)
+                                    : (colorScheme == .light ? Color.black : Color.white)
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+            }
+            .scrollIndicators(.never)
+            
+            Spacer()
+            
+            // Footer hint
+            HStack {
+                Text("↑↓ navigate • ↵ select • esc close")
+                    .font(.system(size: 10))
+                    .foregroundColor(.gray)
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+        .frame(maxWidth: 650)
+        .background(Color(colorScheme == .light ? .white : Color.black))
+    }
+    
     var body: some View {
         let navHeight: CGFloat = 68
         let textColor = colorScheme == .light ? Color.gray : Color.gray.opacity(0.8)
@@ -602,8 +715,12 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                     .ignoresSafeArea()
                 
               
-                // Content with date header
-                VStack(spacing: 0) {
+                if isSearchMode {
+                    // Search UI
+                    searchView
+                } else {
+                    // Content with date header
+                    VStack(spacing: 0) {
                     // Date header
                     Text(todayHeaderText)
                         .font(.system(size: 13, weight: .medium, design: .default))
@@ -641,6 +758,61 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
 
                         // Add keyboard monitor for backspace/delete keys
                         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                            // Check for Cmd+K (keycode 40)
+                            let hasCommand = event.modifierFlags.contains(.command)
+                            let isKKey = event.keyCode == 40
+                            
+                            // Search mode keyboard navigation
+                            if isSearchMode {
+                                // Escape to close
+                                if event.keyCode == 53 {
+                                    DispatchQueue.main.async {
+                                        exitSearchMode()
+                                    }
+                                    return nil
+                                }
+                                
+                                // Down arrow (keycode 125)
+                                if event.keyCode == 125 {
+                                    DispatchQueue.main.async {
+                                        if selectedSearchIndex < searchResults.count - 1 {
+                                            selectedSearchIndex += 1
+                                        }
+                                    }
+                                    return nil
+                                }
+                                
+                                // Up arrow (keycode 126)
+                                if event.keyCode == 126 {
+                                    DispatchQueue.main.async {
+                                        if selectedSearchIndex > 0 {
+                                            selectedSearchIndex -= 1
+                                        }
+                                    }
+                                    return nil
+                                }
+                                
+                                // Enter/Return (keycode 36)
+                                if event.keyCode == 36 && !searchResults.isEmpty {
+                                    DispatchQueue.main.async {
+                                        selectSearchResult(searchResults[selectedSearchIndex])
+                                    }
+                                    return nil
+                                }
+                            }
+                            
+                            if hasCommand && isKKey {
+                                DispatchQueue.main.async {
+                                    if !isSearchMode {
+                                        isSearchMode = true
+                                        searchQuery = ""
+                                        searchResults = entries.map { SearchResult(entry: $0, filename: $0.filename, preview: $0.previewText, matchRange: nil) }
+                                        selectedSearchIndex = 0
+                                    }
+                                }
+                                return nil // Consume the event
+                            }
+                            
                             // Check if backspace is disabled and the key is delete/backspace
                             if backspaceDisabled && (event.keyCode == 51 || event.keyCode == 117) {
                                 // Block the backspace/delete key
@@ -649,6 +821,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                             return event
                         }
                     }
+                }
                 }
                 VStack {
                     Spacer()
@@ -1399,6 +1572,78 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
             entries[index].previewText = truncated.isEmpty ? "" : truncated
             entryDictionary[entry.id] = entries[index]
         }
+    }
+    
+    // MARK: - Search Functionality
+    private func performSearch() {
+        if searchQuery.isEmpty {
+            // Show all entries when no query
+            searchResults = entries.map { entry in
+                SearchResult(
+                    entry: entry,
+                    filename: entry.filename,
+                    preview: entry.previewText,
+                    matchRange: nil
+                )
+            }
+            return
+        }
+        
+        let query = searchQuery.lowercased()
+        var results: [SearchResult] = []
+        
+        for entry in entries {
+            let documentsDirectory = getDocumentsDirectory()
+            let fileURL = documentsDirectory.appendingPathComponent(entry.filename)
+            
+            guard let content = try? String(contentsOf: fileURL, encoding: .utf8) else { continue }
+            
+            let (_, bodyContent) = parseFrontmatter(from: content)
+            let lowerContent = bodyContent.lowercased()
+            
+            if let range = lowerContent.range(of: query) {
+                // Find context around match
+                let startIndex = bodyContent.index(range.lowerBound, offsetBy: -30, limitedBy: bodyContent.startIndex) ?? bodyContent.startIndex
+                let endIndex = bodyContent.index(range.upperBound, offsetBy: 30, limitedBy: bodyContent.endIndex) ?? bodyContent.endIndex
+                let context = String(bodyContent[startIndex..<endIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+                
+                results.append(SearchResult(
+                    entry: entry,
+                    filename: entry.filename,
+                    preview: context,
+                    matchRange: range
+                ))
+            } else if entry.filename.lowercased().contains(query) {
+                // Match in filename
+                results.append(SearchResult(
+                    entry: entry,
+                    filename: entry.filename,
+                    preview: entry.previewText,
+                    matchRange: nil
+                ))
+            }
+        }
+        
+        searchResults = results
+        selectedSearchIndex = 0
+    }
+    
+    private func exitSearchMode() {
+        isSearchMode = false
+        searchQuery = ""
+        searchResults = []
+    }
+    
+    private func selectSearchResult(_ result: SearchResult) {
+        // Exit search mode
+        isSearchMode = false
+        searchQuery = ""
+        searchResults = []
+        
+        // Load the selected entry
+        selectedProjectPath = nil
+        selectedEntryId = result.entry.id
+        loadEntry(entry: result.entry)
     }
     
     private func saveEntry(entry: HumanEntry) {
