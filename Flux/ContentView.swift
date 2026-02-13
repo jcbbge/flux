@@ -41,13 +41,16 @@ struct HumanEntry: Identifiable {
     static func createNew() -> HumanEntry {
         let id = UUID()
         let now = Date()
-        let dateString = DateFormatterCache.shared.string(from: now, format: "yyyy-MM-dd-HH-mm-ss")
+        let dateString = DateFormatterCache.shared.string(from: now, format: "yyyy-MM-dd")
         let displayDate = DateFormatterCache.shared.string(from: now, format: "MMM d")
+        
+        // Short UUID prefix (first 8 chars) for filename readability
+        let idPrefix = String(id.uuidString.prefix(8))
         
         return HumanEntry(
             id: id,
             date: displayDate,
-            filename: "[\(id)]-[\(dateString)].md",
+            filename: "\(dateString)-\(idPrefix).md",
             previewText: ""
         )
     }
@@ -296,111 +299,46 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
     private func loadExistingEntries() {
         let documentsDirectory = getDocumentsDirectory()
         print("Looking for entries in: \(documentsDirectory.path)")
-        
+
         do {
             let fileURLs = try fileManager.contentsOfDirectory(at: documentsDirectory, includingPropertiesForKeys: nil)
             let mdFiles = fileURLs.filter { $0.pathExtension == "md" }
-            
+
             print("Found \(mdFiles.count) .md files")
-            
-            // Process each file
+
             let entriesWithDates = mdFiles.compactMap { fileURL -> (entry: HumanEntry, date: Date, content: String)? in
                 let filename = fileURL.lastPathComponent
                 print("Processing: \(filename)")
-                
-                // Extract UUID and date from filename - pattern [uuid]-[yyyy-MM-dd-HH-mm-ss].md
-                // Direct string parsing (faster than regex)
-                guard let uuidStart = filename.firstIndex(of: "["),
-                      let uuidEnd = filename[uuidStart...].dropFirst().firstIndex(of: "]"),
-                      let dateStart = filename[uuidEnd...].dropFirst().firstIndex(of: "["),
-                      let dateEnd = filename[dateStart...].dropFirst().firstIndex(of: "]") else {
-                    print("Failed to extract UUID or date from filename: \(filename)")
-                    return nil
+
+                if let result = parseNewFormat(filename: filename, fileURL: fileURL) {
+                    return result
                 }
-                let uuidString = String(filename[filename.index(after: uuidStart)..<uuidEnd])
-                let dateString = String(filename[filename.index(after: dateStart)..<dateEnd])
-                guard let uuid = UUID(uuidString: uuidString) else {
-                    print("Failed to parse UUID from filename: \(filename)")
-                    return nil
+
+                if let result = parseOldFormat(filename: filename, fileURL: fileURL) {
+                    return result
                 }
-                
-                // Parse the date string
-                guard let fileDate = DateFormatterCache.shared.date(from: dateString, format: "yyyy-MM-dd-HH-mm-ss") else {
-                    print("Failed to parse date from filename: \(filename)")
-                    return nil
-                }
-                
-                // Read file contents for preview
-                do {
-                    let content = try String(contentsOf: fileURL, encoding: .utf8)
-                    
-                    // Single-pass preview generation: extract first 200 chars, replace newlines, truncate
-                    let maxPreviewChars = 200
-                    let maxDisplayChars = 30
-                    let previewEnd = min(content.count, maxPreviewChars)
-                    let partialContent = previewEnd < content.count 
-                        ? String(content.prefix(previewEnd))
-                        : content
-                    
-                    // Single pass: replace newlines, trim, truncate
-                    let processed = partialContent
-                    var result = ""
-                    result.reserveCapacity(min(processed.count, maxDisplayChars + 3))
-                    
-                    for char in processed {
-                        if result.count >= maxDisplayChars {
-                            result.append("...")
-                            break
-                        }
-                        result.append(char == "\n" ? " " : char)
-                    }
-                    
-                    // Trim leading/trailing whitespace in-place
-                    let truncated = result.trimmingCharacters(in: .whitespacesAndNewlines)
-                    
-                    // Format display date
-                    let displayDate = DateFormatterCache.shared.string(from: fileDate, format: "MMM d")
-                    
-                    return (
-                        entry: HumanEntry(
-                            id: uuid,
-                            date: displayDate,
-                            filename: filename,
-                            previewText: truncated.isEmpty ? "" : truncated
-                        ),
-                        date: fileDate,
-                        content: content  // Store the full content to check for welcome message
-                    )
-                } catch {
-                    print("Error reading file: \(error)")
-                    return nil
-                }
+
+                print("Failed to parse filename: \(filename)")
+                return nil
             }
-            
-            // Sort and extract entries
+
             entries = entriesWithDates
-                .sorted { $0.date > $1.date }  // Sort by actual date from filename
+                .sorted { $0.date > $1.date }
                 .map { $0.entry }
-            
-            // Build O(1) lookup dictionary
+
             entryDictionary = Dictionary(uniqueKeysWithValues: entries.map { ($0.id, $0) })
-            
+
             print("Successfully loaded and sorted \(entries.count) entries")
-            
-            // Check if we need to create a new entry
+
             let calendar = Calendar.current
             let today = Date()
             let todayStart = calendar.startOfDay(for: today)
-            
-            // Check if there's an empty entry from today
+
             let hasEmptyEntryToday = entries.contains { entry in
-                // Convert the display date (e.g. "Mar 14") to a Date object
                 if let entryDate = DateFormatterCache.shared.date(from: entry.date, format: "MMM d") {
-                    // Set year component to current year since our stored dates don't include year
                     var components = calendar.dateComponents([.year, .month, .day], from: entryDate)
                     components.year = calendar.component(.year, from: today)
-                    
-                    // Get start of day for the entry date
+
                     if let entryDateWithYear = calendar.date(from: components) {
                         let entryDayStart = calendar.startOfDay(for: entryDateWithYear)
                         return calendar.isDate(entryDayStart, inSameDayAs: todayStart) && entry.previewText.isEmpty
@@ -408,28 +346,21 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                 }
                 return false
             }
-            
-            // Check if we have only one entry and it's the welcome message
+
             let hasOnlyWelcomeEntry = entries.count == 1 && entriesWithDates.first?.content.contains("Welcome to Flux.") == true
-            
+
             if entries.isEmpty {
-                // First time user - create entry with welcome message
                 print("First time user, creating welcome entry")
                 createNewEntry()
             } else if !hasEmptyEntryToday && !hasOnlyWelcomeEntry {
-                // No empty entry for today and not just the welcome entry - create new entry
                 print("No empty entry for today, creating new entry")
                 createNewEntry()
             } else {
-                // Select the most recent empty entry from today or the welcome entry
                 if let todayEntry = entries.first(where: { entry in
-                    // Convert the display date (e.g. "Mar 14") to a Date object
                     if let entryDate = DateFormatterCache.shared.date(from: entry.date, format: "MMM d") {
-                        // Set year component to current year since our stored dates don't include year
                         var components = calendar.dateComponents([.year, .month, .day], from: entryDate)
                         components.year = calendar.component(.year, from: today)
-                        
-                        // Get start of day for the entry date
+
                         if let entryDateWithYear = calendar.date(from: components) {
                             let entryDayStart = calendar.startOfDay(for: entryDateWithYear)
                             return calendar.isDate(entryDayStart, inSameDayAs: todayStart) && entry.previewText.isEmpty
@@ -440,17 +371,133 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                     selectedEntryId = todayEntry.id
                     loadEntry(entry: todayEntry)
                 } else if hasOnlyWelcomeEntry {
-                    // If we only have the welcome entry, select it
+                    selectedEntryId = entries[0].id
+                    loadEntry(entry: entries[0])
+                } else {
                     selectedEntryId = entries[0].id
                     loadEntry(entry: entries[0])
                 }
             }
-            
+
         } catch {
             print("Error loading directory contents: \(error)")
             print("Creating default entry after error")
             createNewEntry()
         }
+    }
+
+    private func parseNewFormat(filename: String, fileURL: URL) -> (entry: HumanEntry, date: Date, content: String)? {
+        let name = filename.replacingOccurrences(of: ".md", with: "")
+        let parts = name.components(separatedBy: "-")
+
+        guard parts.count >= 3,
+              parts[0].count == 4,
+              parts[1].count == 2,
+              parts[2].count == 2,
+              let year = Int(parts[0]),
+              let month = Int(parts[1]),
+              let day = Int(parts[2]),
+              (1...12).contains(month),
+              (1...31).contains(day) else {
+            return nil
+        }
+
+        guard let idPart = parts.last,
+              idPart.count == 8,
+              idPart.allSatisfy({ $0.isHexDigit }) else {
+            return nil
+        }
+
+        var dateComponents = DateComponents()
+        dateComponents.year = year
+        dateComponents.month = month
+        dateComponents.day = day
+
+        guard let fileDate = Calendar.current.date(from: dateComponents) else {
+            return nil
+        }
+
+        do {
+            let content = try String(contentsOf: fileURL, encoding: .utf8)
+            let padded = "\(idPart)-0000-0000-0000-000000000000"
+            let uuid = UUID(uuidString: padded) ?? UUID()
+
+            let preview = generatePreview(from: content)
+            let displayDate = DateFormatterCache.shared.string(from: fileDate, format: "MMM d")
+
+            return (
+                entry: HumanEntry(
+                    id: uuid,
+                    date: displayDate,
+                    filename: filename,
+                    previewText: preview
+                ),
+                date: fileDate,
+                content: content
+            )
+        } catch {
+            print("Error reading file: \(error)")
+            return nil
+        }
+    }
+
+    private func parseOldFormat(filename: String, fileURL: URL) -> (entry: HumanEntry, date: Date, content: String)? {
+        guard let uuidStart = filename.firstIndex(of: "["),
+              let uuidEnd = filename[uuidStart...].dropFirst().firstIndex(of: "]"),
+              let dateStart = filename[uuidEnd...].dropFirst().firstIndex(of: "["),
+              let dateEnd = filename[dateStart...].dropFirst().firstIndex(of: "]") else {
+            return nil
+        }
+
+        let uuidString = String(filename[filename.index(after: uuidStart)..<uuidEnd])
+        let dateString = String(filename[filename.index(after: dateStart)..<dateEnd])
+
+        guard let uuid = UUID(uuidString: uuidString),
+              let fileDate = DateFormatterCache.shared.date(from: dateString, format: "yyyy-MM-dd-HH-mm-ss") else {
+            return nil
+        }
+
+        do {
+            let content = try String(contentsOf: fileURL, encoding: .utf8)
+            let preview = generatePreview(from: content)
+            let displayDate = DateFormatterCache.shared.string(from: fileDate, format: "MMM d")
+
+            return (
+                entry: HumanEntry(
+                    id: uuid,
+                    date: displayDate,
+                    filename: filename,
+                    previewText: preview
+                ),
+                date: fileDate,
+                content: content
+            )
+        } catch {
+            print("Error reading file: \(error)")
+            return nil
+        }
+    }
+
+    private func generatePreview(from content: String) -> String {
+        let maxPreviewChars = 200
+        let maxDisplayChars = 30
+        let previewEnd = min(content.count, maxPreviewChars)
+        let partialContent = previewEnd < content.count
+            ? String(content.prefix(previewEnd))
+            : content
+
+        var result = ""
+        result.reserveCapacity(min(partialContent.count, maxDisplayChars + 3))
+
+        for char in partialContent {
+            if result.count >= maxDisplayChars {
+                result.append("...")
+                break
+            }
+            result.append(char == "\n" ? " " : char)
+        }
+
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
     
     // MARK: - Project Discovery
