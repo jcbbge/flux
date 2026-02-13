@@ -53,6 +53,19 @@ struct HumanEntry: Identifiable {
     }
 }
 
+// MARK: - Project Model
+struct Project: Identifiable {
+    let id = UUID()
+    let name: String
+    let path: String
+    let lastModified: Date
+    var hasWorkspace: Bool
+    
+    var displayName: String {
+        return name
+    }
+}
+
 struct HeartEmoji: Identifiable {
     let id = UUID()
     var position: CGPoint
@@ -63,6 +76,8 @@ struct ContentView: View {
     private let headerString = "\n\n"
     @State private var entries: [HumanEntry] = []
     @State private var entryDictionary: [UUID: HumanEntry] = [:]
+    @State private var projects: [Project] = []
+    @State private var selectedProjectPath: String? = nil
     @State private var text: String = ""  // Remove initial welcome text since we'll handle it in createNewEntry
     
     @State private var isFullscreen = false
@@ -412,6 +427,65 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
             print("Error loading directory contents: \(error)")
             print("Creating default entry after error")
             createNewEntry()
+        }
+    }
+    
+    // MARK: - Project Discovery
+    private func discoverProjects() {
+        let homeDirectory = FileManager.default.homeDirectoryForCurrentUser
+        print("Scanning for projects in: \(homeDirectory.path)")
+        
+        var discoveredProjects: [Project] = []
+        
+        do {
+            let contents = try fileManager.contentsOfDirectory(at: homeDirectory, includingPropertiesForKeys: [.isDirectoryKey], options: .skipsHiddenFiles)
+            
+            for url in contents {
+                var isDirectory: ObjCBool = false
+                guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory),
+                      isDirectory.boolValue else { continue }
+                
+                let path = url.path
+                let name = url.lastPathComponent
+                
+                // Skip system directories and common non-project folders
+                let skipList = [
+                    "Applications", "Desktop", "Documents", "Downloads", "Library",
+                    "Movies", "Music", "Pictures", "Public", "flux", ".Trash",
+                    "node_modules", ".git", ".swiftpm", "build-output"
+                ]
+                guard !skipList.contains(name), !name.hasPrefix(".") else { continue }
+                
+                // Check for project indicators
+                let hasGit = fileManager.fileExists(atPath: "\(path)/.git")
+                let hasWorkspace = fileManager.fileExists(atPath: "\(path)/workspace")
+                let hasNextSteps = fileManager.fileExists(atPath: "\(path)/workspace/NEXT_STEPS.md")
+                
+                // Only include if it has git or workspace
+                guard hasGit || hasWorkspace else { continue }
+                
+                // Get modification date
+                var lastModified = Date()
+                if let attrs = try? fileManager.attributesOfItem(atPath: path) {
+                    lastModified = attrs[.modificationDate] as? Date ?? Date()
+                }
+                
+                let project = Project(
+                    name: name,
+                    path: path,
+                    lastModified: lastModified,
+                    hasWorkspace: hasWorkspace || hasNextSteps
+                )
+                discoveredProjects.append(project)
+                print("Found project: \(name) (git: \(hasGit), workspace: \(hasWorkspace))")
+            }
+            
+            // Sort by last modified, newest first
+            projects = discoveredProjects.sorted { $0.lastModified > $1.lastModified }
+            print("Discovered \(projects.count) projects")
+            
+        } catch {
+            print("Error scanning for projects: \(error)")
         }
     }
     
@@ -986,6 +1060,61 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                 Divider()
                 
                 VStack(spacing: 0) {
+                    // Projects Section
+                    if !projects.isEmpty {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("Projects")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(colorScheme == .light ? .gray : .gray.opacity(0.8))
+                                .padding(.horizontal, 16)
+                                .padding(.top, 12)
+                                .padding(.bottom, 8)
+                            
+                            ForEach(projects.prefix(5)) { project in
+                                Button(action: {
+                                    selectedProjectPath = project.path
+                                    // Future: Load project's NEXT_STEPS.md
+                                    print("Selected project: \(project.name)")
+                                }) {
+                                    HStack {
+                                        HStack(spacing: 4) {
+                                            // Project indicator
+                                            Circle()
+                                                .fill(project.hasWorkspace ? Color.green.opacity(0.6) : Color.gray.opacity(0.4))
+                                                .frame(width: 6, height: 6)
+                                            
+                                            Text(project.displayName)
+                                                .font(.system(size: 12))
+                                                .lineLimit(1)
+                                                .foregroundColor(selectedProjectPath == project.path ? 
+                                                    (colorScheme == .light ? .black : .white) :
+                                                    (colorScheme == .light ? .gray : .gray.opacity(0.8)))
+                                        }
+                                        
+                                        Spacer()
+                                        
+                                        if project.hasWorkspace {
+                                            Image(systemName: "doc.text")
+                                                .font(.system(size: 10))
+                                                .foregroundColor(.gray.opacity(0.5))
+                                        }
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 6)
+                                .background(
+                                    selectedProjectPath == project.path ?
+                                        Color.gray.opacity(0.1) :
+                                        Color.clear
+                                )
+                            }
+                        }
+                        
+                        Divider()
+                            .padding(.vertical, 8)
+                    }
+                    
                     // Header
                     Button(action: {
                         NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: getDocumentsDirectory().path)
@@ -1135,6 +1264,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
         .onAppear {
             showingSidebar = false  // Hide sidebar by default
             loadExistingEntries()
+            discoverProjects()
         }
         .onChange(of: text) {
             if let currentId = selectedEntryId,
