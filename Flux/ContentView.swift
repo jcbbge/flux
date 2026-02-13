@@ -75,6 +75,15 @@ struct SearchResult: Identifiable {
     let matchRange: Range<String.Index>?
 }
 
+// MARK: - Todo Item Model
+struct TodoItem: Identifiable {
+    let id = UUID()
+    let entryId: UUID
+    let entryFilename: String
+    let text: String
+    let isDone: Bool
+}
+
 struct HeartEmoji: Identifiable {
     let id = UUID()
     var position: CGPoint
@@ -92,7 +101,8 @@ struct ContentView: View {
     @State private var searchQuery: String = ""
     @State private var searchResults: [SearchResult] = []
     @State private var selectedSearchIndex: Int = 0
-    
+    @State private var todos: [TodoItem] = []
+
     @State private var isFullscreen = false
     @State private var selectedFont: String = "Lato-Regular"
     @State private var currentRandomFont: String = ""
@@ -1343,6 +1353,87 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                             .padding(.vertical, 8)
                     }
                     
+                    // Todos Section
+                    if !todos.isEmpty {
+                        VStack(alignment: .leading, spacing: 0) {
+                            HStack {
+                                Text("Todos")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(colorScheme == .light ? .gray : .gray.opacity(0.8))
+                                
+                                // Count badge
+                                let openCount = todos.filter { !$0.isDone }.count
+                                if openCount > 0 {
+                                    Text("\(openCount)")
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(Color.black)
+                                        .cornerRadius(10)
+                                }
+                                
+                                Spacer()
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.top, 12)
+                            .padding(.bottom, 8)
+                            
+                            // Show open todos first, then done (limited to 10)
+                            let displayTodos = todos
+                                .sorted { (!$0.isDone && $1.isDone) || ($0.isDone == $1.isDone) }
+                                .prefix(10)
+                            
+                            ForEach(Array(displayTodos.enumerated()), id: \.element.id) { index, todo in
+                                Button(action: {
+                                    // Jump to entry containing this todo
+                                    if let entry = entryDictionary[todo.entryId] {
+                                        selectedProjectPath = nil
+                                        selectedEntryId = entry.id
+                                        loadEntry(entry: entry)
+                                    }
+                                }) {
+                                    HStack(alignment: .top, spacing: 8) {
+                                        // Checkbox indicator
+                                        Image(systemName: todo.isDone ? "checkmark.square.fill" : "square")
+                                            .font(.system(size: 11))
+                                            .foregroundColor(todo.isDone ? .gray : (colorScheme == .light ? .black : .white))
+                                        
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            // Todo text
+                                            Text(todo.text)
+                                                .font(.system(size: 11))
+                                                .strikethrough(todo.isDone)
+                                                .foregroundColor(todo.isDone ? .gray : (colorScheme == .light ? .black : .white))
+                                                .lineLimit(2)
+                                                .multilineTextAlignment(.leading)
+                                            
+                                            // Entry filename
+                                            Text(todo.entryFilename)
+                                                .font(.system(size: 9))
+                                                .foregroundColor(.gray.opacity(0.7))
+                                                .lineLimit(1)
+                                        }
+                                        
+                                        Spacer()
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 4)
+                                .opacity(todo.isDone ? 0.6 : 1.0)
+                                
+                                if index < displayTodos.count - 1 && index < 9 {
+                                    Divider()
+                                        .padding(.leading, 38)
+                                }
+                            }
+                        }
+                        
+                        Divider()
+                            .padding(.vertical, 8)
+                    }
+                    
                     // Header
                     Button(action: {
                         NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: getDocumentsDirectory().path)
@@ -1493,6 +1584,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
             showingSidebar = false  // Hide sidebar by default
             loadExistingEntries()
             discoverProjects()
+            extractTodos()
         }
         .onChange(of: text) {
             if let currentId = selectedEntryId,
@@ -1644,6 +1736,49 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
         selectedProjectPath = nil
         selectedEntryId = result.entry.id
         loadEntry(entry: result.entry)
+    }
+    
+    // MARK: - Todo Extraction
+    private func extractTodos() {
+        var extractedTodos: [TodoItem] = []
+        let documentsDirectory = getDocumentsDirectory()
+        
+        for entry in entries {
+            let fileURL = documentsDirectory.appendingPathComponent(entry.filename)
+            
+            guard let content = try? String(contentsOf: fileURL, encoding: .utf8) else { continue }
+            
+            let (_, bodyContent) = parseFrontmatter(from: content)
+            let lines = bodyContent.components(separatedBy: .newlines)
+            
+            for line in lines {
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                
+                // Check for @todo tag
+                if trimmed.contains("@todo") {
+                    let isDone = trimmed.contains("@done") || trimmed.hasPrefix("- [x]") || trimmed.hasPrefix("- [X]")
+                    let cleanText = trimmed
+                        .replacingOccurrences(of: "@todo", with: "")
+                        .replacingOccurrences(of: "@done", with: "")
+                        .replacingOccurrences(of: "- [ ]", with: "")
+                        .replacingOccurrences(of: "- [x]", with: "")
+                        .replacingOccurrences(of: "- [X]", with: "")
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    
+                    if !cleanText.isEmpty {
+                        extractedTodos.append(TodoItem(
+                            entryId: entry.id,
+                            entryFilename: entry.filename,
+                            text: cleanText,
+                            isDone: isDone
+                        ))
+                    }
+                }
+            }
+        }
+        
+        todos = extractedTodos
+        print("Extracted \(todos.count) todos from \(entries.count) entries")
     }
     
     private func saveEntry(entry: HumanEntry) {
