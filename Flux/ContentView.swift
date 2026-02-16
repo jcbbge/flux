@@ -945,6 +945,75 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
         }
     }
     
+    // MARK: - Projects Lens Sidebar
+    var projectsLensSidebar: some View {
+        let textColor = colorScheme == .light ? Color.gray : Color.gray.opacity(0.8)
+        let textHoverColor = colorScheme == .light ? Color.black : Color.white
+        return VStack(spacing: 0) {
+            Button(action: { addNewProject() }) {
+                HStack {
+                    Image(systemName: "plus").font(.system(size: 12))
+                    Text("Add Project").font(.system(size: 13))
+                    Spacer()
+                }
+                .foregroundColor(isHoveringNewEntry ? textHoverColor : textColor)
+                .padding(.horizontal, 16).padding(.vertical, 12)
+            }
+            .buttonStyle(.plain)
+            .onHover { hovering in isHoveringNewEntry = hovering; if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() } }
+            Divider()
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    if selectedProjectForWorkspace == nil {
+                        ForEach(projects) { project in
+                            Button(action: { loadWorkspace(for: project) }) {
+                                HStack {
+                                    HStack(spacing: 4) {
+                                        Circle().fill(project.hasWorkspace ? Color.green.opacity(0.6) : Color.gray.opacity(0.4)).frame(width: 6, height: 6)
+                                        Text(project.displayName).font(.system(size: 13)).lineLimit(1).foregroundColor(colorScheme == .light ? .primary : .white)
+                                    }
+                                    Spacer()
+                                    if project.hasWorkspace { Image(systemName: "folder").font(.system(size: 10)).foregroundColor(.gray.opacity(0.5)) }
+                                }
+                                .padding(.horizontal, 16).padding(.vertical, 8)
+                                .background(selectedProjectForWorkspace?.id == project.id ? Color.gray.opacity(0.1) : Color.clear)
+                            }
+                            .buttonStyle(.plain)
+                            if project.id != projects.last?.id { Divider() }
+                        }
+                    } else {
+                        Button(action: { selectedProjectForWorkspace = nil; workspaceFiles = [] }) {
+                            HStack {
+                                Image(systemName: "chevron.left").font(.system(size: 11))
+                                Text("Projects").font(.system(size: 12))
+                                Spacer()
+                            }
+                            .foregroundColor(textColor).padding(.horizontal, 16).padding(.vertical, 8)
+                        }
+                        .buttonStyle(.plain)
+                        Divider()
+                        Text(selectedProjectForWorkspace?.name ?? "").font(.system(size: 11, weight: .medium)).foregroundColor(textColor).padding(.horizontal, 16).padding(.vertical, 8)
+                        Divider()
+                        ForEach(workspaceFiles) { item in
+                            Button(action: {
+                                if item.isDirectory { loadDirectoryContents(at: item.path) } else { loadWorkspaceFile(at: item.path) }
+                            }) {
+                                HStack {
+                                    Image(systemName: item.isDirectory ? "folder" : "doc.text").font(.system(size: 11)).foregroundColor(item.isDirectory ? .blue : .gray)
+                                    Text(item.name).font(.system(size: 12)).lineLimit(1).foregroundColor(colorScheme == .light ? .primary : .white)
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 16).padding(.vertical, 6)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+            .scrollIndicators(.never)
+        }
+    }
+    
     var body: some View {
         let navHeight: CGFloat = 68
         let textColor = colorScheme == .light ? Color.gray : Color.gray.opacity(0.8)
