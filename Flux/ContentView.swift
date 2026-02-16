@@ -119,6 +119,12 @@ struct ContentView: View {
     @State private var searchResults: [SearchResult] = []
     @State private var selectedSearchIndex: Int = 0
     @State private var todos: [TodoItem] = []
+    @State private var currentLens: LensMode = .notes
+    @State private var selectedProjectForWorkspace: Project? = nil
+    @State private var workspaceFiles: [WorkspaceItem] = []
+    @State private var currentWorkspacePath: String? = nil
+    @State private var currentEntryMetadata: [String: String] = [:]
+    @State private var hoveredLensTab: LensMode? = nil
 
     @State private var isFullscreen = false
     @State private var selectedFont: String = "Lato-Regular"
