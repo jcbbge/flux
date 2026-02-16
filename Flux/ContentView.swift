@@ -862,6 +862,89 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
         }
     }
     
+    // MARK: - Notes Lens Sidebar
+    var notesLensSidebar: some View {
+        let textColor = colorScheme == .light ? Color.gray : Color.gray.opacity(0.8)
+        let textHoverColor = colorScheme == .light ? Color.black : Color.white
+        return VStack(spacing: 0) {
+            if !currentEntryMetadata.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(Array(currentEntryMetadata.sorted(by: { $0.key < $1.key })), id: \.key) { key, value in
+                        HStack(alignment: .top, spacing: 6) {
+                            Text(key + ":").font(.system(size: 11)).foregroundColor(textColor).frame(width: 60, alignment: .trailing)
+                            Text(value).font(.system(size: 11)).foregroundColor(colorScheme == .light ? .black : .white).lineLimit(2)
+                            Spacer()
+                        }
+                    }
+                }
+                .padding(.horizontal, 16).padding(.vertical, 8)
+                Divider()
+            }
+            Button(action: { NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: getDocumentsDirectory().path) }) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 4) {
+                            Text("Show in Finder").font(.system(size: 13)).foregroundColor(isHoveringHistory ? textHoverColor : textColor)
+                            Image(systemName: "arrow.up.right").font(.system(size: 10)).foregroundColor(isHoveringHistory ? textHoverColor : textColor)
+                        }
+                        VersionInfoInline()
+                    }
+                    Spacer()
+                }
+            }
+            .buttonStyle(.plain).padding(.horizontal, 16).padding(.vertical, 12)
+            .onHover { hovering in isHoveringHistory = hovering }
+            Divider()
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(entries) { entry in
+                        Button(action: {
+                            if selectedEntryId != entry.id {
+                                if let currentId = selectedEntryId, let currentEntry = entryDictionary[currentId] {
+                                    pendingSaveTimer?.invalidate()
+                                    saveEntry(entry: currentEntry)
+                                }
+                                selectedEntryId = entry.id
+                                loadEntry(entry: entry)
+                            }
+                        }) {
+                            HStack(alignment: .top) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    HStack {
+                                        Text(entry.previewText).font(.system(size: 13)).lineLimit(1).foregroundColor(.primary)
+                                        Spacer()
+                                        if hoveredEntryId == entry.id {
+                                            HStack(spacing: 8) {
+                                                Button(action: { exportEntryAsPDF(entry: entry) }) {
+                                                    Image(systemName: "arrow.down.circle").font(.system(size: 11))
+                                                        .foregroundColor(hoveredExportId == entry.id ? (colorScheme == .light ? .black : .white) : (colorScheme == .light ? .gray : .gray.opacity(0.8)))
+                                                }
+                                                .buttonStyle(.plain).help("Export entry as PDF")
+                                                .onHover { hovering in withAnimation(.easeInOut(duration: 0.2)) { hoveredExportId = hovering ? entry.id : nil } }
+                                                Button(action: { deleteEntry(entry: entry) }) {
+                                                    Image(systemName: "trash").font(.system(size: 11)).foregroundColor(hoveredTrashId == entry.id ? .red : .gray)
+                                                }
+                                                .buttonStyle(.plain)
+                                                .onHover { hovering in withAnimation(.easeInOut(duration: 0.2)) { hoveredTrashId = hovering ? entry.id : nil } }
+                                            }
+                                        }
+                                    }
+                                    Text(entry.date).font(.system(size: 12)).foregroundColor(.secondary)
+                                }
+                            }
+                            .frame(maxWidth: .infinity).padding(.horizontal, 16).padding(.vertical, 8)
+                            .background(RoundedRectangle(cornerRadius: 4).fill(backgroundColor(for: entry)))
+                        }
+                        .buttonStyle(PlainButtonStyle()).contentShape(Rectangle())
+                        .onHover { hovering in withAnimation(.easeInOut(duration: 0.2)) { hoveredEntryId = hovering ? entry.id : nil } }
+                        if entry.id != entries.last?.id { Divider() }
+                    }
+                }
+            }
+            .scrollIndicators(.never)
+        }
+    }
+    
     var body: some View {
         let navHeight: CGFloat = 68
         let textColor = colorScheme == .light ? Color.gray : Color.gray.opacity(0.8)
