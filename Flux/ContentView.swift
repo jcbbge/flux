@@ -2252,6 +2252,47 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
         }
     }
     
+    // MARK: - Todos Lens Sidebar
+    var todosLensSidebar: some View {
+        let textColor = colorScheme == .light ? Color.gray : Color.gray.opacity(0.8)
+        let entriesWithTodos = Set(todos.map { $0.entryId }).compactMap { id -> HumanEntry? in entryDictionary[id] }.sorted { $0.date > $1.date }
+        return VStack(spacing: 0) {
+            HStack {
+                let openCount = todos.filter { !$0.isDone }.count
+                Text("\(openCount) open").font(.system(size: 12)).foregroundColor(textColor)
+                Spacer()
+            }
+            .padding(.horizontal, 16).padding(.vertical, 12)
+            Divider()
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(entriesWithTodos) { entry in
+                        let openEntryTodos = todos.filter { $0.entryId == entry.id && !$0.isDone }
+                        Button(action: { selectedEntryId = entry.id; loadEntry(entry: entry) }) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    HStack {
+                                        Text(entry.previewText).font(.system(size: 13)).lineLimit(1).foregroundColor(.primary)
+                                        Spacer()
+                                        if !openEntryTodos.isEmpty {
+                                            Text("\(openEntryTodos.count)").font(.system(size: 10, weight: .medium)).foregroundColor(.white).padding(.horizontal, 6).padding(.vertical, 2).background(Color.black).cornerRadius(10)
+                                        }
+                                    }
+                                    Text(entry.date).font(.system(size: 12)).foregroundColor(.secondary)
+                                }
+                            }
+                            .frame(maxWidth: .infinity).padding(.horizontal, 16).padding(.vertical, 8)
+                            .background(selectedEntryId == entry.id ? Color.gray.opacity(0.1) : Color.clear)
+                        }
+                        .buttonStyle(.plain)
+                        if entry.id != entriesWithTodos.last?.id { Divider() }
+                    }
+                }
+            }
+            .scrollIndicators(.never)
+        }
+    }
+    
     private func openClaude() {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let fullText = claudePrompt + "\n\n" + trimmedText
