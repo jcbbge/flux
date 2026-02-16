@@ -667,17 +667,21 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
         return colorScheme == .light ? Color.primary : Color.white
     }
 
-    var todayHeaderText: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEEE, MMMM d, yyyy"
+    var lensHeaderView: some View {
+        let textColor = colorScheme == .light ? Color.gray : Color.gray.opacity(0.8)
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "MMM d"
+        let todayString = dateFormatter.string(from: Date())
         
-        // Show project name if a project is selected
-        if let projectPath = selectedProjectPath,
-           let project = projects.first(where: { $0.path == projectPath }) {
-            return "📁 \(project.name)"
+        return HStack(spacing: 0) {
+            Text(todayString)
+                .font(.system(size: 11))
+                .foregroundColor(textColor)
+            Spacer()
         }
-        
-        return formatter.string(from: Date())
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
     }
     
     var searchView: some View {
@@ -798,12 +802,8 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                 } else {
                     // Content with date header
                     VStack(spacing: 0) {
-                    // Date header
-                    Text(todayHeaderText)
-                        .font(.system(size: 13, weight: .medium, design: .default))
-                        .foregroundColor(colorScheme == .light ? .gray : .gray.opacity(0.8))
-                        .padding(.top, 20)
-                        .padding(.bottom, 10)
+                    // Lens header
+                    lensHeaderView
                     
                     // Text editor
                     TextEditor(text: Binding(
