@@ -901,6 +901,32 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                 return nil // Consume the event
                             }
                             
+                            // Check for Cmd+1/2/3 for lens switching
+                            if hasCommand {
+                                if event.keyCode == 18 { // 1 key
+                                    DispatchQueue.main.async { currentLens = .notes }
+                                    return nil
+                                }
+                                if event.keyCode == 19 { // 2 key
+                                    DispatchQueue.main.async { currentLens = .projects }
+                                    return nil
+                                }
+                                if event.keyCode == 20 { // 3 key
+                                    DispatchQueue.main.async { currentLens = .todos }
+                                    return nil
+                                }
+                            }
+                            
+                            // Check for Cmd+S to toggle sidebar
+                            if hasCommand && event.keyCode == 1 {
+                                DispatchQueue.main.async {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showingSidebar.toggle()
+                                    }
+                                }
+                                return nil
+                            }
+                            
                             // Check if backspace is disabled and the key is delete/backspace
                             if backspaceDisabled && (event.keyCode == 51 || event.keyCode == 117) {
                                 // Block the backspace/delete key
