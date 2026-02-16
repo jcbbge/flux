@@ -1941,8 +1941,9 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
             if fileManager.fileExists(atPath: fileURL.path) {
                 let fullContent = try String(contentsOf: fileURL, encoding: .utf8)
                 // Strip frontmatter - UI shows body only
-                let (_, bodyContent) = parseFrontmatter(from: fullContent)
+                let (metadata, bodyContent) = parseFrontmatter(from: fullContent)
                 text = bodyContent
+                currentEntryMetadata = metadata
                 print("Successfully loaded entry: \(entry.filename)")
             }
         } catch {
@@ -1955,7 +1956,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
         entries.insert(newEntry, at: 0) // Add to the beginning
         entryDictionary[newEntry.id] = newEntry
         selectedEntryId = newEntry.id
-        
+        currentEntryMetadata = [:]
         // If this is the first entry (entries was empty before adding this one)
         if entries.count == 1 {
             // Read welcome message from default.md
