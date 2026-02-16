@@ -93,6 +93,20 @@ struct HeartEmoji: Identifiable {
     var offset: CGFloat = 0
 }
 
+struct WorkspaceItem: Identifiable {
+    let id = UUID()
+    let name: String
+    let path: String
+    let isDirectory: Bool
+    let parentPath: String?
+}
+
+enum LensMode: String, CaseIterable {
+    case notes = "Notes"
+    case projects = "Projects"
+    case todos = "Todos"
+}
+
 struct ContentView: View {
     private let headerString = "\n\n"
     @State private var entries: [HumanEntry] = []
