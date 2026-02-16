@@ -168,4 +168,151 @@ enum FluxScope: String {
     case projects = "projects"
 }
 
+// MARK: - Shared Data Store
+@MainActor
+class FluxDataStore: ObservableObject {
+    static let shared = FluxDataStore()
+    
+    @Published var entries: [HumanEntry] = []
+    @Published var entryDictionary: [UUID: HumanEntry] = [:]
+    @Published var projects: [Project] = []
+    @Published var todos: [TodoItem] = []
+    
+    private let fileManager = FileManager.default
+    private var fileMonitor: Timer?
+    
+    private init() {
+        loadExistingEntries()
+        startFileMonitoring()
+    }
+    
+    private func getDocumentsDirectory() -> URL {
+        let homeDirectory = fileManager.homeDirectoryForCurrentUser
+        return homeDirectory
+            .appendingPathComponent("flux", isDirectory: true)
+            .appendingPathComponent("Entries", isDirectory: true)
+    }
+    
+    private func startFileMonitoring() {
+        // Poll for file changes every 2 seconds
+        fileMonitor = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
+            Task { @MainActor in
+                self.checkForChanges()
+            }
+        }
+    }
+    
+    private func checkForChanges() {
+        let documentsDirectory = getDocumentsDirectory()
+        
+        guard let files = try? fileManager.contentsOfDirectory(at: documentsDirectory, includingPropertiesForKeys: nil) else { return }
+        let mdFiles = files.filter { $0.pathExtension == "md" }
+        
+        // Check if file count changed
+        if mdFiles.count != entries.count {
+            print("File count changed, reloading entries...")
+            loadExistingEntries()
+            return
+        }
+    }
+    
+    func loadExistingEntries() {
+        let documentsDirectory = getDocumentsDirectory()
+        print("[FluxDataStore] Loading entries from: \(documentsDirectory.path)")
+        
+        do {
+            let fileURLs = try fileManager.contentsOfDirectory(at: documentsDirectory, includingPropertiesForKeys: nil)
+            let mdFiles = fileURLs.filter { $0.pathExtension == "md" }
+            
+            print("[FluxDataStore] Found \(mdFiles.count) .md files")
+            
+            let entriesWithDates = mdFiles.compactMap { fileURL -> (entry: HumanEntry, date: Date, content: String)? in
+                let filename = fileURL.lastPathComponent
+                
+                // Parse date from filename (new format: YYYY-MM-DD-XXXXXXXX.md)
+                let dateString = String(filename.prefix(10)) // YYYY-MM-DD
+                let displayDate: String
+                let sortDate: Date
+                
+                if let parsedDate = DateFormatterCache.shared.date(from: dateString, format: "yyyy-MM-dd") {
+                    sortDate = parsedDate
+                    displayDate = DateFormatterCache.shared.string(from: parsedDate, format: "MMM d")
+                } else {
+                    // Fallback: use file creation date
+                    if let attrs = try? fileManager.attributesOfItem(atPath: fileURL.path),
+                       let creationDate = attrs[.creationDate] as? Date {
+                        sortDate = creationDate
+                        displayDate = DateFormatterCache.shared.string(from: creationDate, format: "MMM d")
+                    } else {
+                        sortDate = Date()
+                        displayDate = "Unknown"
+                    }
+                }
+                
+                // Extract UUID from filename (last 8 chars before .md)
+                let idString = String(filename.dropLast(3).suffix(8))
+                let id = UUID(uuidString: idString.uppercased()) ?? UUID()
+                
+                // Read preview
+                let content = (try? String(contentsOf: fileURL, encoding: .utf8)) ?? ""
+                let (_, bodyContent) = parseFrontmatter(from: content)
+                let previewText = bodyContent.prefix(100).replacingOccurrences(of: "\n", with: " ")
+                
+                let entry = HumanEntry(
+                    id: id,
+                    date: displayDate,
+                    filename: filename,
+                    previewText: String(previewText)
+                )
+                
+                return (entry, sortDate, content)
+            }
+            
+            // Sort by date descending
+            let sortedEntries = entriesWithDates.sorted { $0.date > $1.date }.map { $0.entry }
+            
+            self.entries = sortedEntries
+            self.entryDictionary = Dictionary(uniqueKeysWithValues: sortedEntries.map { ($0.id, $0) })
+            
+            print("[FluxDataStore] Loaded \(self.entries.count) entries")
+            
+        } catch {
+            print("[FluxDataStore] Error loading entries: \(error)")
+        }
+    }
+    
+    func refresh() {
+        loadExistingEntries()
+    }
+    
+    private nonisolated func parseFrontmatter(from content: String) -> (metadata: [String: String], body: String) {
+        guard content.hasPrefix("---") else {
+            return ([:], content)
+        }
+        
+        // Find the end of frontmatter
+        let startIndex = content.index(content.startIndex, offsetBy: 3)
+        guard let endRange = content[startIndex...].range(of: "---") else {
+            return ([:], content)
+        }
+        
+        let frontmatterEnd = content.index(startIndex, offsetBy: endRange.lowerBound.utf16Offset(in: content[startIndex...]))
+        let frontmatter = String(content[startIndex..<frontmatterEnd]).trimmingCharacters(in: .newlines)
+        let body = String(content[content.index(frontmatterEnd, offsetBy: 3)...]).trimmingCharacters(in: .newlines)
+        
+        // Parse simple key: value pairs
+        var metadata: [String: String] = [:]
+        for line in frontmatter.components(separatedBy: .newlines) {
+            let parts = line.split(separator: ":", maxSplits: 1)
+            if parts.count == 2 {
+                let key = String(parts[0]).trimmingCharacters(in: .whitespaces)
+                let value = String(parts[1]).trimmingCharacters(in: .whitespaces)
+                metadata[key] = value
+            }
+        }
+        
+        return (metadata, body)
+    }
+}
+
 // MARK: - Equatable for UUID array

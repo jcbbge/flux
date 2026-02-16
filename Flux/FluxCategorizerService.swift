@@ -9,7 +9,7 @@
 import Foundation
 
 class FluxCategorizerService {
-    private let ollamaURL = URL(string: "http://localhost:7102/api/chat")!
+    private let generateURL = URL(string: "http://localhost:7102/api/generate")!
     private let embeddingURL = URL(string: "http://localhost:7102/api/embeddings")!
     private let model = "qwen2.5:0.5b"
     private let workspaceMDPath = "/Users/jcbbge/spacely/workspace/WORKSPACE.md"
@@ -20,17 +20,15 @@ class FluxCategorizerService {
     
     func enrichFlux(_ entry: FluxEntry) async -> FluxMeta? {
         let prompt = """
-        Per WORKSPACE.md conventions: Enrich this flux entry as high-level JSON only.
-        Content: \(entry.content)
-        Output: { "fluxTitle": "Human-readable title (1-2 words from content)", "fluxType": "journal" (infer if missing), "category": "e.g., Reflection", "summary": "1-2 sentence roll-up", "tags": ["ui", "dev"], "links": [], "insights": ["Link to similar?", "Stagnation flag?"] }
-        No deep analysis; keep simple.
+        {"title": "", "type": "journal", "cat": "", "sum": "", "tags": [], "links": [], "insights": []}
+        \(entry.content.prefix(200))
         """
         guard let result = await callCategorizer(with: prompt, type: .enrich) else { return nil }
         return FluxMeta(
-            fluxTitle: result["fluxTitle"] as? String,
-            fluxType: result["fluxType"] as? String ?? "journal",
-            category: result["category"] as? String,
-            summary: result["summary"] as? String,
+            fluxTitle: result["title"] as? String,
+            fluxType: result["type"] as? String ?? "journal",
+            category: result["cat"] as? String ?? result["category"] as? String,
+            summary: result["sum"] as? String ?? result["summary"] as? String,
             tags: result["tags"] as? [String] ?? [],
             links: (result["links"] as? [String])?.compactMap { UUID(uuidString: $0) } ?? [],
             insights: result["insights"] as? [String] ?? []
@@ -38,12 +36,9 @@ class FluxCategorizerService {
     }
     
     func propagateFluxLinks(_ entry: FluxEntry, scope: FluxScope = .all) async -> [UUID] {
-        let context = "Scope: \(scope.rawValue). Existing links: \(entry.fluxMeta?.links ?? [])"
         let prompt = """
-        Per WORKSPACE.md: Suggest propagation/backlinks for this flux (UUIDs only in array).
-        Entry: \(entry.filename)
-        Context: \(context)
-        Output: JSON { "links": ["uuid-task-abc123"] } (2-3 suggestions from scope; no new ID creation).
+        JSON: {"links": ["uuid1", "uuid2"]}
+        Suggest 2-3 existing UUIDs to link to: \(entry.filename)
         """
         
         if let result = await callCategorizer(with: prompt, type: .propagate) {
@@ -67,9 +62,8 @@ class FluxCategorizerService {
     
     func suggestFluxInsights(_ entry: FluxEntry) async -> [String] {
         let prompt = """
-        Per WORKSPACE.md: High-level insights for this flux (2-3 lines, no deep analysis).
-        Entry: \(entry.content)
-        Output: JSON { "insights": ["Stagnation? Link to project?"] }
+        JSON: {"insights": ["insight1", "insight2"]}
+        1-line insights for: \(entry.content.prefix(100))
         """
         
         if let result = await callCategorizer(with: prompt, type: .insights) {
@@ -79,22 +73,18 @@ class FluxCategorizerService {
     }
     
     func callCategorizer(with prompt: String, type: EnrichmentType) async -> [String: Any]? {
-        var request = URLRequest(url: ollamaURL)
+        var request = URLRequest(url: generateURL)
         request.httpMethod = "POST"
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        let messages = [
-            ["role": "system", "content": "Follow WORKSPACE.md conventions. Output valid JSON only for \(type.rawValue)."],
-            ["role": "user", "content": prompt]
-        ]
-        
         let body: [String: Any] = [
             "model": model,
-            "messages": messages,
+            "prompt": "JSON only. No text.\n\(prompt)",
             "stream": false,
-            "format": "json",
-            "temperature": 0.3,
-            "max_tokens": 500
+            "temperature": 0.2,
+            "top_p": 0.8,
+            "repeat_penalty": 1.05,
+            "max_tokens": 200
         ]
         
         do {
@@ -102,9 +92,8 @@ class FluxCategorizerService {
             let (data, response) = try await URLSession.shared.data(for: request)
             if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
                 let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-                if let message = json?["message"] as? [String: Any],
-                   let content = message["content"] as? String {
-                    return try JSONSerialization.jsonObject(with: content.data(using: .utf8)!) as? [String: Any]
+                if let resp = json?["response"] as? String {
+                    return try JSONSerialization.jsonObject(with: resp.data(using: .utf8)!) as? [String: Any]
                 }
             }
         } catch {
