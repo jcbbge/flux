@@ -784,6 +784,84 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
         .background(Color(colorScheme == .light ? .white : Color.black))
     }
     
+    // MARK: - Workspace Navigation
+    private func loadWorkspace(for project: Project) {
+        let workspacePath = "\(project.path)/workspace"
+        guard fileManager.fileExists(atPath: workspacePath) else { return }
+        selectedProjectForWorkspace = project
+        currentWorkspacePath = workspacePath
+        do {
+            let workspaceURL = URL(fileURLWithPath: workspacePath)
+            let contents = try fileManager.contentsOfDirectory(at: workspaceURL, includingPropertiesForKeys: [.isDirectoryKey], options: .skipsHiddenFiles)
+            var items: [WorkspaceItem] = []
+            for url in contents {
+                var isDirectory: ObjCBool = false
+                guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) else { continue }
+                items.append(WorkspaceItem(name: url.lastPathComponent, path: url.path, isDirectory: isDirectory.boolValue, parentPath: workspacePath))
+            }
+            workspaceFiles = items.sorted {
+                if $0.isDirectory != $1.isDirectory { return $0.isDirectory && !$1.isDirectory }
+                return $0.name.lowercased() < $1.name.lowercased()
+            }
+        } catch { workspaceFiles = [] }
+    }
+    
+    private func loadDirectoryContents(at path: String) {
+        currentWorkspacePath = path
+        do {
+            let dirURL = URL(fileURLWithPath: path)
+            let contents = try fileManager.contentsOfDirectory(at: dirURL, includingPropertiesForKeys: [.isDirectoryKey], options: .skipsHiddenFiles)
+            var items: [WorkspaceItem] = []
+            if let project = selectedProjectForWorkspace {
+                let workspacePath = "\(project.path)/workspace"
+                if path != workspacePath {
+                    let parentPath = URL(fileURLWithPath: path).deletingLastPathComponent().path
+                    items.append(WorkspaceItem(name: "..", path: parentPath, isDirectory: true, parentPath: parentPath))
+                }
+            }
+            for url in contents {
+                var isDirectory: ObjCBool = false
+                guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) else { continue }
+                items.append(WorkspaceItem(name: url.lastPathComponent, path: url.path, isDirectory: isDirectory.boolValue, parentPath: path))
+            }
+            workspaceFiles = items.sorted {
+                if $0.name == ".." { return true }
+                if $1.name == ".." { return false }
+                if $0.isDirectory != $1.isDirectory { return $0.isDirectory && !$1.isDirectory }
+                return $0.name.lowercased() < $1.name.lowercased()
+            }
+        } catch { workspaceFiles = [] }
+    }
+    
+    private func loadWorkspaceFile(at path: String) {
+        do {
+            if fileManager.fileExists(atPath: path) {
+                let content = try String(contentsOfFile: path, encoding: .utf8)
+                let (_, bodyContent) = parseFrontmatter(from: content)
+                text = "\n\n" + bodyContent
+            }
+        } catch { }
+    }
+    
+    private func addNewProject() {
+        let dialog = NSOpenPanel()
+        dialog.title = "Choose a Project Directory"
+        dialog.canChooseDirectories = true
+        dialog.canChooseFiles = false
+        dialog.allowsMultipleSelection = false
+        dialog.directoryURL = FileManager.default.homeDirectoryForCurrentUser
+        if dialog.runModal() == .OK, let url = dialog.url {
+            let path = url.path
+            let hasWorkspace = fileManager.fileExists(atPath: "\(path)/workspace")
+            let project = Project(name: url.lastPathComponent, path: path, lastModified: Date(), hasWorkspace: hasWorkspace)
+            if !projects.contains(where: { $0.path == path }) {
+                projects.append(project)
+                projects.sort { $0.lastModified > $1.lastModified }
+            }
+            loadWorkspace(for: project)
+        }
+    }
+    
     var body: some View {
         let navHeight: CGFloat = 68
         let textColor = colorScheme == .light ? Color.gray : Color.gray.opacity(0.8)
