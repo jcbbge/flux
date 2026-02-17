@@ -133,6 +133,7 @@ No Xcode build phase scripts needed — all in Makefile.
 
 Before claiming "build complete":
 
+- [ ] `make clean` executed FIRST (removes old build-output/)
 - [ ] Changes committed to git
 - [ ] `make install` executed
 - [ ] No errors in build output
@@ -142,6 +143,6 @@ Before claiming "build complete":
 
 ---
 
-**Last updated:** 2026-02-12  
+**Last updated:** 2026-02-16  
 **Build system:** Makefile-based  
 **Install target:** `/Applications/Flux.app`
