@@ -37,7 +37,21 @@ make verify     # Automated check
 defaults read /Applications/Flux.app/Contents/Info GitCommit
 ```
 
-### 4. Makefile Is Source of Truth
+### 4. Always Clean Before Building
+
+Old build directories litter the system. **Always run `make clean` before building.**
+
+```bash
+make clean    # Remove old build-output/
+make install  # Then build fresh
+```
+
+Or use the combined target:
+```bash
+make clean install
+```
+
+### 5. Makefile Is Source of Truth
 
 All build logic lives in `Makefile`. Do not:
 - Create one-off xcodebuild commands
@@ -53,7 +67,7 @@ cd /Users/jcbbge/flux
 # ... edit files ...
 
 # 2. Commit
-make clean          # optional but safe
+make clean          # ALWAYS clean old builds first!
 git add -A
 git commit -m "type: description"
 
