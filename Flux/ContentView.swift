@@ -187,8 +187,6 @@ struct ContentView: View {
     
 let availableFonts = NSFontManager.shared.availableFontFamilies
 
-// Add state for manager
-@StateObject private var workspaceManager = FluxWorkspaceManager()
     let standardFonts = ["Lato-Regular", "Arial", ".AppleSystemUIFont", "Times New Roman"]
     let fontSizes: [CGFloat] = [16, 18, 20, 22, 24, 26]
     
@@ -368,7 +366,9 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
             entryDictionary = Dictionary(uniqueKeysWithValues: entries.map { ($0.id, $0) })
 
             print("Successfully loaded and sorted \(entries.count) entries")
-
+            
+            let today = Date()
+            
             // Check if today's file exists (YYYY-MM-DD.md format)
             let todayFilename = DateFormatterCache.shared.string(from: today, format: "yyyy-MM-dd") + ".md"
             let hasTodayFile = entries.contains { $0.filename == todayFilename }
@@ -494,8 +494,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
             return nil
         }
     }
-    }
-    
+
     private func parseTodayFormat(filename: String, fileURL: URL) -> (entry: HumanEntry, date: Date, content: String)? {
         // Format: YYYY-MM-DD.md (no UUID hash)
         let name = filename.replacingOccurrences(of: ".md", with: "")
@@ -583,11 +582,11 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
         var discoveredProjects: [Project] = []
         
         do {
-            let contents = try fileManager.contentsOfDirectory(at: homeDirectory, includingPropertiesForKeys: [.isDirectoryKey], options: .skipsHiddenFiles)
+            let contents = try FileManager.default.contentsOfDirectory(at: homeDirectory, includingPropertiesForKeys: [.isDirectoryKey], options: .skipsHiddenFiles)
             
             for url in contents {
                 var isDirectory: ObjCBool = false
-                guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory),
+                guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory),
                       isDirectory.boolValue else { continue }
                 
                 let path = url.path
@@ -602,16 +601,16 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                 guard !skipList.contains(name), !name.hasPrefix(".") else { continue }
                 
                 // Check for project indicators
-                let hasGit = fileManager.fileExists(atPath: "\(path)/.git")
-                let hasWorkspace = fileManager.fileExists(atPath: "\(path)/workspace")
-                let hasNextSteps = fileManager.fileExists(atPath: "\(path)/workspace/NEXT_STEPS.md")
+                let hasGit = FileManager.default.fileExists(atPath: "\(path)/.git")
+                let hasWorkspace = FileManager.default.fileExists(atPath: "\(path)/workspace")
+                let hasNextSteps = FileManager.default.fileExists(atPath: "\(path)/workspace/NEXT_STEPS.md")
                 
                 // Only include if it has git or workspace
                 guard hasGit || hasWorkspace else { continue }
                 
                 // Get modification date
                 var lastModified = Date()
-                if let attrs = try? fileManager.attributesOfItem(atPath: path) {
+                if let attrs = try? FileManager.default.attributesOfItem(atPath: path) {
                     lastModified = attrs[.modificationDate] as? Date ?? Date()
                 }
                 
@@ -907,7 +906,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
         dialog.directoryURL = FileManager.default.homeDirectoryForCurrentUser
         if dialog.runModal() == .OK, let url = dialog.url {
             let path = url.path
-            let hasWorkspace = fileManager.fileExists(atPath: "\(path)/workspace")
+            let hasWorkspace = FileManager.default.fileExists(atPath: "\(path)/workspace")
             let project = Project(name: url.lastPathComponent, path: path, lastModified: Date(), hasWorkspace: hasWorkspace)
             if !projects.contains(where: { $0.path == path }) {
                 projects.append(project)
@@ -2064,15 +2063,16 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
         let dateString = DateFormatterCache.shared.string(from: today, format: "yyyy-MM-dd")
         let createdString = ISO8601DateFormatter().string(from: today)
         
-        let frontmatter = """---
-date: \(dateString)
-type: daily
-created: \(createdString)
----
+        let frontmatter = """
+        ---
+        date: \(dateString)
+        type: daily
+        created: \(createdString)
+        ---
 
-# \(dateString)
+        # \(dateString)
 
-"""
+        """
         text = frontmatter
         
         // Save immediately

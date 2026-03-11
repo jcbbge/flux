@@ -143,6 +143,86 @@ Before claiming "build complete":
 
 ---
 
-**Last updated:** 2026-02-16  
-**Build system:** Makefile-based  
+## Swift Code Standards
+
+### Brace Discipline
+
+This codebase has one large file (`ContentView.swift`, 2700+ lines). Brace errors here
+cascade into 50+ false errors. Every function/struct/closure must be explicitly closed.
+
+**After any edit to ContentView.swift**, run:
+```bash
+xcrun swiftc -typecheck Flux/ContentView.swift 2>&1 | head -20
+```
+
+**"Does not conform to protocol 'View'"** = brace mismatch. Do NOT debug logic. Count braces:
+```bash
+python3 - <<'EOF'
+with open('Flux/ContentView.swift') as f:
+    lines = f.readlines()
+depth = 0
+for i, line in enumerate(lines, 1):
+    prev = depth
+    for ch in line:
+        if ch == '{': depth += 1
+        elif ch == '}': depth -= 1
+    if depth == 0 and i < len(lines) and prev > 0:
+        print(f"PREMATURE CLOSE line {i}: {line.strip()[:80]}")
+print(f"Final depth: {depth}")
+EOF
+```
+
+This finds the exact bad line in <1 second. Trust it. Fix only that line.
+
+### SwiftUI Rules
+
+- `ContentView` is a SwiftUI `View` struct — it requires `var body: some View` inside the struct
+- All `@State`, `@Binding`, and computed properties must live INSIDE the struct
+- Extensions on `NSView` and helper functions at file scope must be OUTSIDE the struct
+- File-scope `func` or `extension` blocks inside ContentView = brace mismatch above them
+
+### Safe Edit Workflow for ContentView.swift
+
+```
+1. Make targeted edit
+2. xcrun swiftc -typecheck Flux/ContentView.swift 2>&1 | head -5
+3. If errors → run brace-depth script above
+4. Fix the ONE structural line it points to
+5. Re-typecheck
+6. Only then: make clean install
+```
+
+**Never skip step 2.** The file is large enough that a single bad brace is invisible to the eye.
+
+### Cascade Error Rule
+
+If you see the same `@State` variable reported "not in scope" in 3+ functions simultaneously:
+- Stop. Do not fix any individual error.
+- That is a cascade from a single brace mismatch.
+- Run the brace-depth script. Fix the root.
+
+---
+
+## Swift Debugging SOP
+
+### Class 1: Compile Errors
+
+| Symptom | Root Cause | Fix |
+|---------|-----------|-----|
+| `does not conform to protocol 'View'` | `body` is outside ContentView (brace mismatch) | Run brace-depth script |
+| `cannot find 'X' in scope` (many) | Method/property displaced outside struct | Same |
+| `declaration only valid at file scope` | Extensions/funcs inside struct that shouldn't be | Same |
+| Single `cannot find 'X' in scope` | Missing import or actual typo | Check imports, spelling |
+| `expression type is ambiguous` | Type inference failure in complex ViewBuilder | Add explicit type annotation |
+
+### Class 2: Runtime / SwiftUI Crashes
+
+- `EXC_BREAKPOINT` on launch → unsigned app in /Applications → `make install`
+- State not updating → check that signal is read inside reactive scope (JSX/body)
+- View not refreshing → ensure `@State`/`@Binding` used, not plain `var`
+
+---
+
+**Last updated:** 2026-03-11
+**Build system:** Makefile-based
 **Install target:** `/Applications/Flux.app`
