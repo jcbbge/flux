@@ -54,6 +54,19 @@ struct HumanEntry: Identifiable {
             previewText: ""
         )
     }
+    static func createToday() -> HumanEntry {
+        let id = UUID()
+        let now = Date()
+        let dateString = DateFormatterCache.shared.string(from: now, format: "yyyy-MM-dd")
+        let displayDate = DateFormatterCache.shared.string(from: now, format: "MMM d")
+        
+        return HumanEntry(
+            id: id,
+            date: displayDate,
+            filename: "\(dateString).md",
+            previewText: ""
+        )
+    }
 }
 
 // MARK: - Project Model
@@ -154,6 +167,7 @@ struct ContentView: View {
     @State private var hoveredTrashId: UUID? = nil
     @State private var hoveredExportId: UUID? = nil
     @State private var isHoveringNewEntry = false
+    @State private var isHoveringSummarize = false
     @State private var isHoveringClock = false
     @State private var isHoveringHistory = false
     @State private var isHoveringHistoryText = false
@@ -329,6 +343,11 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
             let entriesWithDates = mdFiles.compactMap { fileURL -> (entry: HumanEntry, date: Date, content: String)? in
                 let filename = fileURL.lastPathComponent
                 print("Processing: \(filename)")
+                
+                // Try today format first (YYYY-MM-DD.md - no UUID)
+                if let result = parseTodayFormat(filename: filename, fileURL: fileURL) {
+                    return result
+                }
 
                 if let result = parseNewFormat(filename: filename, fileURL: fileURL) {
                     return result
@@ -350,44 +369,22 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
 
             print("Successfully loaded and sorted \(entries.count) entries")
 
-            let calendar = Calendar.current
-            let today = Date()
-            let todayStart = calendar.startOfDay(for: today)
-
-            let hasEmptyEntryToday = entries.contains { entry in
-                if let entryDate = DateFormatterCache.shared.date(from: entry.date, format: "MMM d") {
-                    var components = calendar.dateComponents([.year, .month, .day], from: entryDate)
-                    components.year = calendar.component(.year, from: today)
-
-                    if let entryDateWithYear = calendar.date(from: components) {
-                        let entryDayStart = calendar.startOfDay(for: entryDateWithYear)
-                        return calendar.isDate(entryDayStart, inSameDayAs: todayStart) && entry.previewText.isEmpty
-                    }
-                }
-                return false
-            }
-
+            // Check if today's file exists (YYYY-MM-DD.md format)
+            let todayFilename = DateFormatterCache.shared.string(from: today, format: "yyyy-MM-dd") + ".md"
+            let hasTodayFile = entries.contains { $0.filename == todayFilename }
+            
             let hasOnlyWelcomeEntry = entries.count == 1 && entriesWithDates.first?.content.contains("Welcome to Flux.") == true
 
             if entries.isEmpty {
                 print("First time user, creating welcome entry")
                 createNewEntry()
-            } else if !hasEmptyEntryToday && !hasOnlyWelcomeEntry {
-                print("No empty entry for today, creating new entry")
-                createNewEntry()
+            } else if !hasTodayFile && !hasOnlyWelcomeEntry {
+                print("No today's file found, creating today's entry: \(todayFilename)")
+                createTodayEntry()
             } else {
-                if let todayEntry = entries.first(where: { entry in
-                    if let entryDate = DateFormatterCache.shared.date(from: entry.date, format: "MMM d") {
-                        var components = calendar.dateComponents([.year, .month, .day], from: entryDate)
-                        components.year = calendar.component(.year, from: today)
-
-                        if let entryDateWithYear = calendar.date(from: components) {
-                            let entryDayStart = calendar.startOfDay(for: entryDateWithYear)
-                            return calendar.isDate(entryDayStart, inSameDayAs: todayStart) && entry.previewText.isEmpty
-                        }
-                    }
-                    return false
-                }) {
+                // Load today's file if it exists, otherwise load most recent
+                if let todayEntry = entries.first(where: { $0.filename == todayFilename }) {
+                    print("Loading today's entry: \(todayFilename)")
                     selectedEntryId = todayEntry.id
                     loadEntry(entry: todayEntry)
                 } else if hasOnlyWelcomeEntry {
@@ -497,14 +494,72 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
             return nil
         }
     }
+    }
+    
+    private func parseTodayFormat(filename: String, fileURL: URL) -> (entry: HumanEntry, date: Date, content: String)? {
+        // Format: YYYY-MM-DD.md (no UUID hash)
+        let name = filename.replacingOccurrences(of: ".md", with: "")
+        let parts = name.components(separatedBy: "-")
+        
+        guard parts.count == 3,
+              parts[0].count == 4,
+              parts[1].count == 2,
+              parts[2].count == 2,
+              let year = Int(parts[0]),
+              let month = Int(parts[1]),
+              let day = Int(parts[2]),
+              (1...12).contains(month),
+              (1...31).contains(day) else {
+            return nil
+        }
+        
+        var dateComponents = DateComponents()
+        dateComponents.year = year
+        dateComponents.month = month
+        dateComponents.day = day
+        
+        guard let fileDate = Calendar.current.date(from: dateComponents) else {
+            return nil
+        }
+        
+        do {
+            let content = try String(contentsOf: fileURL, encoding: .utf8)
+            let uuid = UUID() // Generate new UUID for today entries
+            let preview = generatePreview(from: content)
+            let displayDate = DateFormatterCache.shared.string(from: fileDate, format: "MMM d")
+            
+            return (
+                entry: HumanEntry(
+                    id: uuid,
+                    date: displayDate,
+                    filename: filename,
+                    previewText: preview
+                ),
+                date: fileDate,
+                content: content
+            )
+        } catch {
+            print("Error reading today file: \(error)")
+            return nil
+        }
+    }
 
     private func generatePreview(from content: String) -> String {
         let maxPreviewChars = 200
         let maxDisplayChars = 30
-        let previewEnd = min(content.count, maxPreviewChars)
-        let partialContent = previewEnd < content.count
-            ? String(content.prefix(previewEnd))
-            : content
+        
+        // Strip YAML frontmatter if present
+        var cleanedContent = content
+        if content.hasPrefix("---") {
+            if let endIndex = content.dropFirst(3).range(of: "---")?.upperBound {
+                cleanedContent = String(content[endIndex...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        
+        let previewEnd = min(cleanedContent.count, maxPreviewChars)
+        let partialContent = previewEnd < cleanedContent.count
+            ? String(cleanedContent.prefix(previewEnd))
+            : cleanedContent
 
         var result = ""
         result.reserveCapacity(min(partialContent.count, maxDisplayChars + 3))
@@ -1560,6 +1615,28 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                             Text("•")
                                 .foregroundColor(.gray)
                             
+                            // Summarize button
+                            Button(action: {
+                                summarizeCurrentEntry()
+                            }) {
+                                Text("Summarize")
+                                    .font(.system(size: 13))
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundColor(isHoveringSummarize ? textHoverColor : textColor)
+                            .onHover { hovering in
+                                isHoveringSummarize = hovering
+                                isHoveringBottomNav = hovering
+                                if hovering {
+                                    NSCursor.pointingHand.push()
+                                } else {
+                                    NSCursor.pop()
+                                }
+                            }
+                            
+                            Text("•")
+                                .foregroundColor(.gray)
+                            
                             // Theme toggle button
                             Button(action: {
                                 colorScheme = colorScheme == .light ? .dark : .light
@@ -1640,6 +1717,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                     case .todos:
                         todosLensSidebar
                     }
+                }
                 .frame(width: 200)
                 .background(Color(colorScheme == .light ? .white : NSColor.black))
             }
@@ -1695,7 +1773,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
             isFullscreen = false
         }
     }
-    
+
     private func backgroundColor(for entry: HumanEntry) -> Color {
         if entry.id == selectedEntryId {
             return Color.gray.opacity(0.1)  // More subtle selection highlight
@@ -1974,6 +2052,189 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
             saveEntry(entry: newEntry)
         }
     }
+    
+    private func createTodayEntry() {
+        let todayEntry = HumanEntry.createToday()
+        entries.insert(todayEntry, at: 0)
+        entryDictionary[todayEntry.id] = todayEntry
+        selectedEntryId = todayEntry.id
+        
+        // Create with frontmatter
+        let today = Date()
+        let dateString = DateFormatterCache.shared.string(from: today, format: "yyyy-MM-dd")
+        let createdString = ISO8601DateFormatter().string(from: today)
+        
+        let frontmatter = """---
+date: \(dateString)
+type: daily
+created: \(createdString)
+---
+
+# \(dateString)
+
+"""
+        text = frontmatter
+        
+        // Save immediately
+        saveEntry(entry: todayEntry)
+    }
+    
+    private func summarizeCurrentEntry() {
+        guard let currentId = selectedEntryId,
+              let currentEntry = entryDictionary[currentId] else {
+            print("No entry selected")
+            return
+        }
+        
+        // Get clean content without frontmatter
+        let content = text
+        var cleanContent = content
+        if content.hasPrefix("---") {
+            if let endIndex = content.dropFirst(3).range(of: "---")?.upperBound {
+                cleanContent = String(content[endIndex...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        
+        guard !cleanContent.isEmpty else {
+            print("Entry is empty, nothing to summarize")
+            return
+        }
+        
+        // Call Ollama for summarization and tags
+        let prompt = """
+        Summarize the following note in 2-3 sentences. Then generate 3-5 relevant tags.
+        
+        Format your response exactly like this:
+        Summary: [your summary here]
+        Tags: [tag1, tag2, tag3, ...]
+        
+        Note content:
+        \(cleanContent)
+        """
+        
+        // Prepare Ollama API request
+        let ollamaURL = URL(string: "http://localhost:8001/api/generate")!
+        let requestBody: [String: Any] = [
+            "model": "qwen2.5:0.5b",
+            "prompt": prompt,
+            "stream": false
+        ]
+        
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: requestBody) else {
+            print("Failed to encode request")
+            return
+        }
+        
+        var request = URLRequest(url: ollamaURL)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = jsonData
+        
+        // Make async request
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                print("Ollama request failed: \(error)")
+                return
+            }
+            
+            guard let data = data,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let responseText = json["response"] as? String else {
+                print("Failed to parse Ollama response")
+                return
+            }
+            
+            // Parse summary and tags from response
+            let lines = responseText.components(separatedBy: .newlines)
+            var summary = ""
+            var tags: [String] = []
+            
+            for line in lines {
+                if line.hasPrefix("Summary:") {
+                    summary = line.replacingOccurrences(of: "Summary:", with: "").trimmingCharacters(in: .whitespaces)
+                } else if line.hasPrefix("Tags:") {
+                    let tagsString = line.replacingOccurrences(of: "Tags:", with: "").trimmingCharacters(in: .whitespaces)
+                    tags = tagsString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                }
+            }
+            
+            // Update frontmatter on main thread
+            DispatchQueue.main.async {
+                self.updateEntryFrontmatter(entry: currentEntry, summary: summary, tags: tags)
+                
+                // TODO: Store embeddings in SurrealDB
+                self.storeEmbeddings(entry: currentEntry, content: cleanContent)
+            }
+        }.resume()
+    }
+    
+    private func updateEntryFrontmatter(entry: HumanEntry, summary: String, tags: [String]) {
+        let documentsDirectory = getDocumentsDirectory()
+        let fileURL = documentsDirectory.appendingPathComponent(entry.filename)
+        
+        // Read current content
+        guard let currentContent = try? String(contentsOf: fileURL, encoding: .utf8) else {
+            print("Failed to read entry for frontmatter update")
+            return
+        }
+        
+        // Extract existing frontmatter or create new
+        var existingFrontmatter: [String: String] = [:]
+        var bodyContent = currentContent
+        
+        if currentContent.hasPrefix("---") {
+            if let endRange = currentContent.dropFirst(3).range(of: "---") {
+                let frontmatterText = String(currentContent[..<endRange.upperBound])
+                bodyContent = String(currentContent[endRange.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                
+                // Parse existing frontmatter (simple key: value parsing)
+                let lines = frontmatterText.components(separatedBy: .newlines)
+                for line in lines {
+                    if let colonIndex = line.firstIndex(of: ":") {
+                        let key = String(line[..<colonIndex]).trimmingCharacters(in: .whitespaces)
+                        let value = String(line[colonIndex...].dropFirst()).trimmingCharacters(in: .whitespaces)
+                        existingFrontmatter[key] = value
+                    }
+                }
+            }
+        }
+        
+        // Update with new values
+        let dateString = DateFormatterCache.shared.string(from: Date(), format: "yyyy-MM-dd")
+        existingFrontmatter["date"] = dateString
+        existingFrontmatter["type"] = existingFrontmatter["type"] ?? "entry"
+        existingFrontmatter["summary"] = summary
+        existingFrontmatter["tags"] = tags.joined(separator: ", ")
+        
+        // Reconstruct file content
+        var newFrontmatterLines = ["---"]
+        for (key, value) in existingFrontmatter.sorted(by: { $0.key < $1.key }) {
+            newFrontmatterLines.append("\(key): \(value)")
+        }
+        newFrontmatterLines.append("---")
+        newFrontmatterLines.append("")
+        
+        let newContent = newFrontmatterLines.joined(separator: "\n") + "\n" + bodyContent
+        
+        // Write back to file
+        do {
+            try newContent.write(to: fileURL, atomically: true, encoding: .utf8)
+            print("Updated frontmatter for \(entry.filename)")
+            
+            // Update preview text
+            updatePreviewText(for: entry)
+        } catch {
+            print("Failed to write updated frontmatter: \(error)")
+        }
+    }
+    
+    private func storeEmbeddings(entry: HumanEntry, content: String) {
+        // TODO: Implement SurrealDB embedding storage
+        // This requires calling the nomic-embed-text model via Ollama
+        // and storing the result in SurrealDB
+        print("TODO: Store embeddings in SurrealDB for \(entry.filename)")
+    }
+
     
     private func openChatGPT() {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
