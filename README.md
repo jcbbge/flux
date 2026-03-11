@@ -1,6 +1,6 @@
 # Flux
 
-A minimal, distraction-free writing environment for macOS.
+A minimal, distraction-free writing environment for macOS. *but now my own personal IAE (evolution of the IDE)
 
 ## Building
 
