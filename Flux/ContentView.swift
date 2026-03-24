@@ -2069,11 +2069,10 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
         type: daily
         created: \(createdString)
         ---
-
-        # \(dateString)
-
         """
-        text = frontmatter
+        // Parse to get empty body for display (metadata hidden)
+        let (_, bodyContent) = parseFrontmatter(from: frontmatter)
+        text = bodyContent
         
         // Save immediately
         saveEntry(entry: todayEntry)
