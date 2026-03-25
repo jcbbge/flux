@@ -987,11 +987,8 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                             let entryInfo = extractTitleAndSubtitle(from: entry)
                             HStack(alignment: .top) {
                                 VStack(alignment: .leading, spacing: 2) {
-                                    // Date - top, right aligned, subtle
-                                    HStack {
-                                        Spacer()
-                                        Text(entry.date).font(.system(size: 11)).foregroundColor(.secondary)
-                                    }
+                                    // Date - top, left aligned, subtle
+                                    Text(entry.date).font(.system(size: 11)).foregroundColor(.secondary)
                                     // Title - middle, first line, not bold
                                     Text(entryInfo.title).font(.system(size: 13, weight: .regular)).lineLimit(1).foregroundColor(.primary)
                                     // Subtitle - bottom, next line, subtle
@@ -1120,8 +1117,12 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                     TextEditor(text: Binding(
                         get: { text },
                         set: { newValue in
-                            // Ensure the text always starts with two newlines
-                            if !newValue.hasPrefix("\n\n") {
+                            // Only enforce prefix on initial load or paste, not during active deletion at start
+                            if !newValue.hasPrefix("\n\n") && newValue.count > text.count - 3 {
+                                // User is likely deleting at start - allow without cursor jump
+                                text = newValue
+                            } else if !newValue.hasPrefix("\n\n") {
+                                // Initial load or significant paste - add prefix
                                 text = "\n\n" + newValue.trimmingCharacters(in: .newlines)
                             } else {
                                 text = newValue
@@ -1129,7 +1130,6 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                         }
                     ))
                     .background(Color(colorScheme == .light ? .white : .black))
-                    .font(.custom(selectedFont, size: fontSize))
                     .foregroundColor(colorScheme == .light ? Color(red: 0.20, green: 0.20, blue: 0.20) : Color(red: 0.9, green: 0.9, blue: 0.9))
                     .scrollContentBackground(.hidden)
                     .scrollIndicators(.never)
@@ -2292,11 +2292,8 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                             let entryInfo = extractTitleAndSubtitle(from: entry)
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
-                                    // Date - top, right aligned, subtle
-                                    HStack {
-                                        Spacer()
-                                        Text(entry.date).font(.system(size: 11)).foregroundColor(.secondary)
-                                    }
+                                    // Date - top, left aligned, subtle
+                                    Text(entry.date).font(.system(size: 11)).foregroundColor(.secondary)
                                     // Title - middle, first line, not bold
                                     Text(entryInfo.title).font(.system(size: 13, weight: .regular)).lineLimit(1).foregroundColor(.primary)
                                     // Subtitle - bottom, next line, subtle
