@@ -1454,6 +1454,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                     lastClickTime = now
                                 }
                             }
+                            .font(.custom(selectedSecondaryFont, size: tokens.textSecondary))
                             .buttonStyle(.plain)
                             .foregroundColor(timerColor)
                             .onHover { hovering in
@@ -1492,6 +1493,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                 // Ensure didCopyPrompt is reset when opening the menu
                                 didCopyPrompt = false
                             }
+                            .font(.custom(selectedSecondaryFont, size: tokens.textSecondary))
                             .buttonStyle(.plain)
                             .foregroundColor(isHoveringChat ? textHoverColor : textColor)
                             .onHover { hovering in
@@ -1650,6 +1652,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                 Text(backspaceDisabled ? "Backspace is Off" : "Backspace is On")
                                     .foregroundColor(isHoveringBackspaceToggle ? textHoverColor : textColor)
                             }
+                            .font(.custom(selectedSecondaryFont, size: tokens.textSecondary))
                             .buttonStyle(.plain)
                             .onHover { hovering in
                                 isHoveringBackspaceToggle = hovering
@@ -1669,6 +1672,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                     window.toggleFullScreen(nil)
                                 }
                             }
+                            .font(.custom(selectedSecondaryFont, size: tokens.textSecondary))
                             .buttonStyle(.plain)
                             .foregroundColor(isHoveringFullscreen ? textHoverColor : textColor)
                             .onHover { hovering in
