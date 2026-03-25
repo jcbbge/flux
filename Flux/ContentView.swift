@@ -1780,7 +1780,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                         todosLensSidebar
                     }
                 }
-                .frame(width: 200)
+                .frame(width: 300)
                 .background(Color(colorScheme == .light ? .white : NSColor.black))
             }
         }
