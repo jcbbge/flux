@@ -2310,10 +2310,10 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
         return VStack(spacing: 0) {
             HStack {
                 let openCount = todos.filter { !$0.isDone }.count
-                Text("\(openCount) open").font(.system(size: 12)).foregroundColor(textColor)
+                Text("\(openCount) open").font(.system(size: tokens.textXs)).foregroundColor(textColor)
                 Spacer()
             }
-            .padding(.horizontal, 16).padding(.vertical, 12)
+            .padding(.horizontal, tokens.spaceXl).padding(.vertical, tokens.spaceLg)
             Divider()
             ScrollView {
                 LazyVStack(spacing: 0) {
@@ -2323,16 +2323,16 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                             let entryInfo = extractTitleAndSubtitle(from: entry)
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack {
-                                    Text(entry.date).font(.system(size: 11)).foregroundColor(.secondary)
+                                    Text(entry.date).font(.system(size: tokens.textXs)).foregroundColor(.secondary)
                                     Spacer()
                                     if !openEntryTodos.isEmpty {
-                                        Text("\(openEntryTodos.count)").font(.system(size: 10, weight: .medium)).foregroundColor(.white).padding(.horizontal, 6).padding(.vertical, 2).background(Color.black).cornerRadius(10)
+                                        Text("\(openEntryTodos.count)").font(.system(size: tokens.text2Xs, weight: .medium)).foregroundColor(.white).padding(.horizontal, tokens.spaceSm).padding(.vertical, 2).background(Color.black).cornerRadius(10)
                                     }
                                 }
-                                Text(entryInfo.title).font(.system(size: 13, weight: .regular)).lineLimit(1).foregroundColor(.primary)
-                                Text(entryInfo.subtitle).font(.system(size: 11)).lineLimit(1).foregroundColor(.secondary)
+                                Text(entryInfo.title).font(.system(size: tokens.textSm, weight: .regular)).lineLimit(1).foregroundColor(.primary)
+                                Text(entryInfo.subtitle).font(.system(size: tokens.textXs)).lineLimit(1).foregroundColor(.secondary)
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.vertical, 8)
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, tokens.spaceXl).padding(.vertical, tokens.spaceMd)
                             .background(selectedEntryId == entry.id ? Color.gray.opacity(0.1) : Color.clear)
                         }
                         .buttonStyle(.plain)
@@ -2343,7 +2343,6 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
             .scrollIndicators(.never)
         }
     }
-    
     private func openClaude() {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let fullText = claudePrompt + "\n\n" + trimmedText
