@@ -800,10 +800,10 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
             // Search input
             HStack {
                 TextField("Search...", text: $searchQuery)
-                    .font(.system(size: 16))
+                    .font(.system(size: tokens.textBase))
                     .textFieldStyle(PlainTextFieldStyle())
-                    .padding(.vertical, 12)
-                    .padding(.horizontal, 16)
+                    .padding(.vertical, tokens.spaceLg)
+                    .padding(.horizontal, tokens.spaceXl)
                     .onChange(of: searchQuery) {
                         performSearch()
                     }
@@ -818,7 +818,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                             .foregroundColor(.gray)
                     }
                     .buttonStyle(PlainButtonStyle())
-                    .padding(.trailing, 16)
+                    .padding(.trailing, tokens.spaceXl)
                 }
             }
             .background(Color(colorScheme == .light ? .white : Color.black))
@@ -830,12 +830,12 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                 // Results count
                 HStack {
                     Text("\(searchResults.count) results")
-                    .font(.system(size: 11))
+                    .font(.system(size: tokens.textXs))
                     .foregroundColor(.gray)
                     Spacer()
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+                .padding(.horizontal, tokens.spaceXl)
+                .padding(.vertical, tokens.spaceMd)
                 
                 // Search results
                 ScrollView {
@@ -844,23 +844,23 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                             Button(action: {
                                 selectSearchResult(result)
                             }) {
-                                HStack(alignment: .top, spacing: 12) {
-                                    VStack(alignment: .leading, spacing: 4) {
+                                HStack(alignment: .top, spacing: tokens.spaceLg) {
+                                    VStack(alignment: .leading, spacing: tokens.spaceSm) {
                                         // Filename
                                         Text(result.filename)
-                                        .font(.system(size: 12, weight: .medium))
+                                        .font(.system(size: tokens.textSm, weight: .medium))
                                         .lineLimit(1)
                                         
                                         // Preview with match
                                         if !result.preview.isEmpty {
                                             Text(result.preview)
-                                            .font(.system(size: 11))
+                                            .font(.system(size: tokens.textXs))
                                             .foregroundColor(.gray)
                                             .lineLimit(2)
                                         }
                                     }
-                                    .padding(.vertical, 10)
-                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, tokens.spaceLg)
+                                    .padding(.horizontal, tokens.spaceXl)
                                     
                                     Spacer()
                                 }
@@ -889,12 +889,12 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
             // Footer hint
             HStack {
                 Text("↑↓ navigate • ↵ select • esc close")
-                    .font(.system(size: 10))
+                    .font(.system(size: tokens.text2Xs))
                     .foregroundColor(.gray)
                 Spacer()
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, tokens.spaceXl)
+            .padding(.vertical, tokens.spaceLg)
         }
         .frame(maxWidth: 650)
         .background(Color(colorScheme == .light ? .white : Color.black))
