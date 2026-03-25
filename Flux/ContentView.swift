@@ -770,8 +770,8 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
         /// All text sizes scale relative to base font size
         var text2Xs: CGFloat { baseFontSize * 0.55 }   // ~10px at 18px
         var textXs: CGFloat { baseFontSize * 0.6 }     // ~11px at 18px
-        var textSm: CGFloat { baseFontSize * 0.7 }     // ~12-13px
-        var textBase: CGFloat { baseFontSize }         // 18px
+        var textSm: CGFloat { baseFontSize * 0.6 }     // ~11px at 18px - secondary text
+        var textBase: CGFloat { baseFontSize }         // 18px - primary text
         var textMd: CGFloat { baseFontSize * 0.85 }    // ~15px at 18px
         var textLg: CGFloat { baseFontSize * 1.1 }     // ~20px at 18px
         var textXl: CGFloat { baseFontSize * 1.25 }    // ~22-23px
@@ -1290,6 +1290,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                     fontSize = fontSizes[nextIndex]
                                 }
                             }
+                            .font(.system(size: tokens.textXs))
                             .buttonStyle(.plain)
                             .foregroundColor(isHoveringSize ? textHoverColor : textColor)
                             .onHover { hovering in
@@ -1309,6 +1310,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                 selectedFont = "Lato-Regular"
                                 currentRandomFont = ""
                             }
+                            .font(.system(size: tokens.textXs))
                             .buttonStyle(.plain)
                             .foregroundColor(hoveredFont == "Lato" ? textHoverColor : textColor)
                             .onHover { hovering in
@@ -1328,6 +1330,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                 selectedFont = "Arial"
                                 currentRandomFont = ""
                             }
+                            .font(.system(size: tokens.textXs))
                             .buttonStyle(.plain)
                             .foregroundColor(hoveredFont == "Arial" ? textHoverColor : textColor)
                             .onHover { hovering in
@@ -1347,6 +1350,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                 selectedFont = ".AppleSystemUIFont"
                                 currentRandomFont = ""
                             }
+                            .font(.system(size: tokens.textXs))
                             .buttonStyle(.plain)
                             .foregroundColor(hoveredFont == "System" ? textHoverColor : textColor)
                             .onHover { hovering in
@@ -1366,6 +1370,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                 selectedFont = "Times New Roman"
                                 currentRandomFont = ""
                             }
+                            .font(.system(size: tokens.textXs))
                             .buttonStyle(.plain)
                             .foregroundColor(hoveredFont == "Serif" ? textHoverColor : textColor)
                             .onHover { hovering in
@@ -1387,6 +1392,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                     currentRandomFont = randomFont
                                 }
                             }
+                            .font(.system(size: tokens.textXs))
                             .buttonStyle(.plain)
                             .foregroundColor(hoveredFont == "Random" ? textHoverColor : textColor)
                             .onHover { hovering in
