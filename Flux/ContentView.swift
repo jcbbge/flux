@@ -746,7 +746,41 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
     var popoverTextColor: Color {
         return colorScheme == .light ? Color.primary : Color.white
     }
-
+    
+    // MARK: - Design System Tokens
+    
+    /// Design tokens that scale dynamically with the base font size
+    /// Base is 18px, tokens adjust proportionally when font size changes
+    struct DesignTokens {
+        let baseFontSize: CGFloat
+        
+        // MARK: Spacing Scale
+        /// Base spacing unit = fontSize * 0.25
+        /// At 18px: 4.5pt | At 24px: 6pt
+        var spaceUnit: CGFloat { baseFontSize * 0.25 }
+        
+        var spaceXs: CGFloat { spaceUnit * 0.5 }   // 2-3pt
+        var spaceSm: CGFloat { spaceUnit }         // 4.5-6pt
+        var spaceMd: CGFloat { spaceUnit * 2 }    // 9-12pt
+        var spaceLg: CGFloat { spaceUnit * 3 }    // 13.5-18pt
+        var spaceXl: CGFloat { spaceUnit * 4 }    // 18-24pt
+        var space2Xl: CGFloat { spaceUnit * 6 }   // 27-36pt
+        
+        // MARK: Typography Scale
+        /// All text sizes scale relative to base font size
+        var text2Xs: CGFloat { baseFontSize * 0.55 }   // ~10px at 18px
+        var textXs: CGFloat { baseFontSize * 0.6 }     // ~11px at 18px
+        var textSm: CGFloat { baseFontSize * 0.7 }     // ~12-13px
+        var textBase: CGFloat { baseFontSize }         // 18px
+        var textMd: CGFloat { baseFontSize * 0.85 }    // ~15px at 18px
+        var textLg: CGFloat { baseFontSize * 1.1 }     // ~20px at 18px
+        var textXl: CGFloat { baseFontSize * 1.25 }    // ~22-23px
+    }
+    
+    /// Computed property to access design tokens based on current font size
+    var tokens: DesignTokens {
+        DesignTokens(baseFontSize: fontSize)
+    }
     var lensHeaderView: some View {
         let textColor = colorScheme == .light ? Color.gray : Color.gray.opacity(0.8)
         let dateFormatter = DateFormatter()
