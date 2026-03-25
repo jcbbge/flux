@@ -142,17 +142,20 @@ struct ContentView: View {
 
     @State private var isFullscreen = false
     @State private var selectedFont: String = "Lato-Regular"
+    @State private var selectedSecondaryFont: String = "SF Mono"  // Monospaced font for sidebar/status bar
     @State private var currentRandomFont: String = ""
-    @State private var timeRemaining: Int = 900  // Changed to 900 seconds (15 minutes)
+    
+    /// Monospaced fonts for secondary UI (sidebar and status bar)
+    let monospacedFonts = ["SF Mono", "Menlo", "Monaco", "Courier New", "Andale Mono", "Fira Code", "JetBrains Mono", "Source Code Pro", "IBM Plex Mono"]
     @State private var timerIsRunning = false
     @State private var isHoveringTimer = false
     @State private var isHoveringFullscreen = false
     @State private var hoveredFont: String? = nil
-    @State private var isHoveringSize = false
+    @State private var hoveredSecondaryFont: Bool = false
+    @State private var isHoveringSize: Bool = false
     @State private var fontSize: CGFloat = 18
-    @State private var blinkCount = 0
+    @State private var blinkCount: Int = 0
     @State private var isBlinking = false
-    @State private var opacity: Double = 1.0
     @State private var shouldShowGray = true // New state to control color
     @State private var lastClickTime: Date? = nil
     @State private var bottomNavOpacity: Double = 1.0
@@ -1374,6 +1377,29 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                             .foregroundColor(hoveredFont == "Serif" ? textHoverColor : textColor)
                             .onHover { hovering in
                                 hoveredFont = hovering ? "Serif" : nil
+                                isHoveringBottomNav = hovering
+                                if hovering {
+                                    NSCursor.pointingHand.push()
+                                } else {
+                                    NSCursor.pop()
+                                }
+                            }
+                            
+                            Text("•")
+                                .foregroundColor(.gray)
+                            
+                            // Secondary font toggle - cycles through monospaced fonts
+                            Button(selectedSecondaryFont) {
+                                if let currentIndex = monospacedFonts.firstIndex(of: selectedSecondaryFont) {
+                                    let nextIndex = (currentIndex + 1) % monospacedFonts.count
+                                    selectedSecondaryFont = monospacedFonts[nextIndex]
+                                }
+                            }
+                            .font(.system(size: tokens.textSecondary))
+                            .buttonStyle(.plain)
+                            .foregroundColor(hoveredSecondaryFont ? textHoverColor : textColor)
+                            .onHover { hovering in
+                                hoveredSecondaryFont = hovering
                                 isHoveringBottomNav = hovering
                                 if hovering {
                                     NSCursor.pointingHand.push()
