@@ -728,9 +728,6 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
         let todayString = dateFormatter.string(from: Date())
         
         return HStack(spacing: 0) {
-            Text(todayString)
-                .font(.system(size: 11))
-                .foregroundColor(textColor)
             Spacer()
         }
         .padding(.horizontal, 16)
