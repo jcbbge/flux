@@ -1283,7 +1283,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                     
                     HStack {
                         // Font buttons (moved to left)
-                        HStack(spacing: 8) {
+                        HStack(spacing: tokens.spaceMd) {
                             Button(fontSizeButtonTitle) {
                                 if let currentIndex = fontSizes.firstIndex(of: fontSize) {
                                     let nextIndex = (currentIndex + 1) % fontSizes.count
@@ -1399,7 +1399,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                 }
                             }
                         }
-                        .padding(8)
+                        .padding(tokens.spaceMd)
                         .cornerRadius(6)
                         .onHover { hovering in
                             isHoveringBottomNav = hovering
@@ -1408,7 +1408,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                         Spacer()
                         
                         // Utility buttons (moved to right)
-                        HStack(spacing: 8) {
+                        HStack(spacing: tokens.spaceMd) {
                             Button(timerButtonTitle) {
                                 let now = Date()
                                 if let lastClick = lastClickTime,
@@ -1655,7 +1655,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                 createNewEntry()
                             }) {
                                 Text("New Entry")
-                                    .font(.system(size: 13))
+                                    .font(.system(size: tokens.textSm))
                             }
                             .buttonStyle(.plain)
                             .foregroundColor(isHoveringNewEntry ? textHoverColor : textColor)
@@ -1677,7 +1677,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                 summarizeCurrentEntry()
                             }) {
                                 Text("Summarize")
-                                    .font(.system(size: 13))
+                                    .font(.system(size: tokens.textSm))
                             }
                             .buttonStyle(.plain)
                             .foregroundColor(isHoveringSummarize ? textHoverColor : textColor)
@@ -1743,7 +1743,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                             isHoveringBottomNav = hovering
                         }
                     }
-                    .padding()
+                    .padding(tokens.spaceMd)
                     .background(Color(colorScheme == .light ? .white : NSColor.black))
                     .opacity(bottomNavOpacity)
                     .onHover { hovering in
