@@ -756,7 +756,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
             Spacer()
         }
         .padding(.horizontal, 16)
-        .padding(.top, 12)
+        .padding(.top, 16)
         .padding(.bottom, 8)
     }
     
@@ -1219,11 +1219,15 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                 return nil
                             }
                             
-                            // Check if backspace is disabled and the key is delete/backspace
-                            if backspaceDisabled && (event.keyCode == 51 || event.keyCode == 117) {
-                                // Block the backspace/delete key
+                            // Check for Cmd+N to create new entry
+                            if hasCommand && event.keyCode == 45 {
+                                DispatchQueue.main.async {
+                                    createNewEntry()
+                                }
                                 return nil
                             }
+                            
+                            // Check if backspace is disabled and the key is delete/backspace
                             return event
                         }
                     }
@@ -1695,6 +1699,13 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                     }
                     .padding()
                     .background(Color(colorScheme == .light ? .white : .black))
+                    .overlay(
+                        Rectangle()
+                            .frame(height: 1)
+                            .foregroundColor(Color(NSColor.separatorColor))
+                            .frame(maxWidth: .infinity, alignment: .top)
+                        , alignment: .top
+                    )
                     .opacity(bottomNavOpacity)
                     .onHover { hovering in
                         isHoveringBottomNav = hovering

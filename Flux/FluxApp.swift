@@ -29,6 +29,10 @@ struct FluxApp: App {
         .defaultSize(width: 1100, height: 600)
         .windowToolbarStyle(.unifiedCompact)
         .windowResizability(.contentSize)
+        .commands {
+            // Remove the default New Window command (Cmd+N) so we can use it for New Entry
+            CommandGroup(replacing: .newItem) { }
+        }
     }
 }
 
