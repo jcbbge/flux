@@ -985,32 +985,12 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                             }
                         }) {
                             let entryInfo = extractTitleAndSubtitle(from: entry)
-                            HStack(alignment: .top) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    // Date - top, left aligned, subtle
-                                    Text(entry.date).font(.system(size: 11)).foregroundColor(.secondary)
-                                    // Title - middle, first line, not bold
-                                    Text(entryInfo.title).font(.system(size: 13, weight: .regular)).lineLimit(1).foregroundColor(.primary)
-                                    // Subtitle - bottom, next line, subtle
-                                    Text(entryInfo.subtitle).font(.system(size: 11)).lineLimit(1).foregroundColor(.secondary)
-                                }
-                                if hoveredEntryId == entry.id {
-                                    HStack(spacing: 8) {
-                                        Button(action: { exportEntryAsPDF(entry: entry) }) {
-                                            Image(systemName: "arrow.down.circle").font(.system(size: 11))
-                                                .foregroundColor(hoveredExportId == entry.id ? (colorScheme == .light ? .black : .white) : (colorScheme == .light ? .gray : .gray.opacity(0.8)))
-                                        }
-                                        .buttonStyle(.plain).help("Export entry as PDF")
-                                        .onHover { hovering in withAnimation(.easeInOut(duration: 0.2)) { hoveredExportId = hovering ? entry.id : nil } }
-                                        Button(action: { deleteEntry(entry: entry) }) {
-                                            Image(systemName: "trash").font(.system(size: 11)).foregroundColor(hoveredTrashId == entry.id ? .red : .gray)
-                                        }
-                                        .buttonStyle(.plain)
-                                        .onHover { hovering in withAnimation(.easeInOut(duration: 0.2)) { hoveredTrashId = hovering ? entry.id : nil } }
-                                    }
-                                }
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(entry.date).font(.system(size: 11)).foregroundColor(.secondary)
+                                Text(entryInfo.title).font(.system(size: 13, weight: .regular)).lineLimit(1).foregroundColor(.primary)
+                                Text(entryInfo.subtitle).font(.system(size: 11)).lineLimit(1).foregroundColor(.secondary)
                             }
-                            .frame(maxWidth: .infinity).padding(.horizontal, 16).padding(.vertical, 8)
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.vertical, 8)
                             .background(RoundedRectangle(cornerRadius: 4).fill(backgroundColor(for: entry)))
                         }
                         .buttonStyle(PlainButtonStyle()).contentShape(Rectangle())
@@ -2290,20 +2270,18 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                         let openEntryTodos = todos.filter { $0.entryId == entry.id && !$0.isDone }
                         Button(action: { selectedEntryId = entry.id; loadEntry(entry: entry) }) {
                             let entryInfo = extractTitleAndSubtitle(from: entry)
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    // Date - top, left aligned, subtle
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack {
                                     Text(entry.date).font(.system(size: 11)).foregroundColor(.secondary)
-                                    // Title - middle, first line, not bold
-                                    Text(entryInfo.title).font(.system(size: 13, weight: .regular)).lineLimit(1).foregroundColor(.primary)
-                                    // Subtitle - bottom, next line, subtle
-                                    Text(entryInfo.subtitle).font(.system(size: 11)).lineLimit(1).foregroundColor(.secondary)
+                                    Spacer()
+                                    if !openEntryTodos.isEmpty {
+                                        Text("\(openEntryTodos.count)").font(.system(size: 10, weight: .medium)).foregroundColor(.white).padding(.horizontal, 6).padding(.vertical, 2).background(Color.black).cornerRadius(10)
+                                    }
                                 }
-                                if !openEntryTodos.isEmpty {
-                                    Text("\(openEntryTodos.count)").font(.system(size: 10, weight: .medium)).foregroundColor(.white).padding(.horizontal, 6).padding(.vertical, 2).background(Color.black).cornerRadius(10)
-                                }
+                                Text(entryInfo.title).font(.system(size: 13, weight: .regular)).lineLimit(1).foregroundColor(.primary)
+                                Text(entryInfo.subtitle).font(.system(size: 11)).lineLimit(1).foregroundColor(.secondary)
                             }
-                            .frame(maxWidth: .infinity).padding(.horizontal, 16).padding(.vertical, 8)
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.vertical, 8)
                             .background(selectedEntryId == entry.id ? Color.gray.opacity(0.1) : Color.clear)
                         }
                         .buttonStyle(.plain)
