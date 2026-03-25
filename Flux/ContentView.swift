@@ -128,6 +128,7 @@ struct ContentView: View {
     @State private var selectedProjectPath: String? = nil
     @State private var text: String = ""  // Remove initial welcome text since we'll handle it in createNewEntry
     @State private var isSearchMode: Bool = false
+    @FocusState private var isSearchFieldFocused: Bool
     @State private var searchQuery: String = ""
     @State private var searchResults: [SearchResult] = []
     @State private var selectedSearchIndex: Int = 0
@@ -772,6 +773,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                     .onChange(of: searchQuery) {
                         performSearch()
                     }
+                    .focused($isSearchFieldFocused)
                 
                 if !searchQuery.isEmpty {
                     Button(action: {
@@ -789,60 +791,64 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
             
             Divider()
             
-            // Results count
-            HStack {
-                Text("\(searchResults.count) results")
+            // Results count and search results - only show when query is not empty
+            if !searchQuery.isEmpty {
+                // Results count
+                HStack {
+                    Text("\(searchResults.count) results")
                     .font(.system(size: 11))
                     .foregroundColor(.gray)
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            
-            // Search results
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(Array(searchResults.enumerated()), id: \.element.id) { index, result in
-                        Button(action: {
-                            selectSearchResult(result)
-                        }) {
-                            HStack(alignment: .top, spacing: 12) {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    // Filename
-                                    Text(result.filename)
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                
+                // Search results
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(searchResults.enumerated()), id: \.element.id) { index, result in
+                            Button(action: {
+                                selectSearchResult(result)
+                            }) {
+                                HStack(alignment: .top, spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        // Filename
+                                        Text(result.filename)
                                         .font(.system(size: 12, weight: .medium))
                                         .lineLimit(1)
-                                    
-                                    // Preview with match
-                                    if !result.preview.isEmpty {
-                                        Text(result.preview)
+                                        
+                                        // Preview with match
+                                        if !result.preview.isEmpty {
+                                            Text(result.preview)
                                             .font(.system(size: 11))
                                             .foregroundColor(.gray)
                                             .lineLimit(2)
+                                        }
                                     }
+                                    .padding(.vertical, 10)
+                                    .padding(.horizontal, 16)
+                                    
+                                    Spacer()
                                 }
-                                .padding(.vertical, 10)
-                                .padding(.horizontal, 16)
-                                
-                                Spacer()
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(
+                                    selectedSearchIndex == index
+                                        ? (colorScheme == .light ? Color.black : Color.white)
+                                        : Color.clear
+                                )
+                                .foregroundColor(
+                                    selectedSearchIndex == index
+                                        ? (colorScheme == .light ? Color.white : Color.black)
+                                        : (colorScheme == .light ? Color.black : Color.white)
+                                )
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(
-                                selectedSearchIndex == index
-                                    ? (colorScheme == .light ? Color.black : Color.white)
-                                    : Color.clear
-                            )
-                            .foregroundColor(
-                                selectedSearchIndex == index
-                                    ? (colorScheme == .light ? Color.white : Color.black)
-                                    : (colorScheme == .light ? Color.black : Color.white)
-                            )
+                            .buttonStyle(PlainButtonStyle())
                         }
-                        .buttonStyle(PlainButtonStyle())
                     }
                 }
+                .scrollIndicators(.never)
             }
-            .scrollIndicators(.never)
+            
             
             Spacer()
             
@@ -1177,6 +1183,10 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                         searchQuery = ""
                                         searchResults = entries.map { SearchResult(entry: $0, filename: $0.filename, preview: $0.previewText, matchRange: nil) }
                                         selectedSearchIndex = 0
+                                        // Focus the search field after a short delay to ensure view is rendered
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                            isSearchFieldFocused = true
+                                        }
                                     }
                                 }
                                 return nil // Consume the event
@@ -1233,8 +1243,12 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                     }
                 }
                 }
-                VStack {
+                VStack(spacing: 0) {
                     Spacer()
+                    
+                    // Top border matching sidebar Divider
+                    Divider()
+                    
                     HStack {
                         // Font buttons (moved to left)
                         HStack(spacing: 8) {
@@ -1698,14 +1712,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                         }
                     }
                     .padding()
-                    .background(Color(colorScheme == .light ? .white : .black))
-                    .overlay(
-                        Rectangle()
-                            .frame(height: 1)
-                            .foregroundColor(Color(NSColor.separatorColor))
-                            .frame(maxWidth: .infinity, alignment: .top)
-                        , alignment: .top
-                    )
+                    .background(Color(colorScheme == .light ? .white : NSColor.black))
                     .opacity(bottomNavOpacity)
                     .onHover { hovering in
                         isHoveringBottomNav = hovering
