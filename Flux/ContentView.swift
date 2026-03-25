@@ -984,31 +984,31 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
         let textHoverColor = colorScheme == .light ? Color.black : Color.white
         return VStack(spacing: 0) {
             if !currentEntryMetadata.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: tokens.spaceSm) {
                     ForEach(Array(currentEntryMetadata.sorted(by: { $0.key < $1.key })), id: \.key) { key, value in
-                        HStack(alignment: .top, spacing: 6) {
-                            Text(key + ":").font(.system(size: 11)).foregroundColor(textColor).frame(width: 60, alignment: .trailing)
-                            Text(value).font(.system(size: 11)).foregroundColor(colorScheme == .light ? .black : .white).lineLimit(2)
+                        HStack(alignment: .top, spacing: tokens.spaceSm) {
+                            Text(key + ":").font(.system(size: tokens.textXs)).foregroundColor(textColor).frame(width: 60, alignment: .trailing)
+                            Text(value).font(.system(size: tokens.textXs)).foregroundColor(colorScheme == .light ? .black : .white).lineLimit(2)
                             Spacer()
                         }
                     }
                 }
-                .padding(.horizontal, 16).padding(.vertical, 8)
+                .padding(.horizontal, tokens.spaceXl).padding(.vertical, tokens.spaceMd)
                 Divider()
             }
             Button(action: { NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: getDocumentsDirectory().path) }) {
                 HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 4) {
-                            Text("Show in Finder").font(.system(size: 13)).foregroundColor(isHoveringHistory ? textHoverColor : textColor)
-                            Image(systemName: "arrow.up.right").font(.system(size: 10)).foregroundColor(isHoveringHistory ? textHoverColor : textColor)
+                    VStack(alignment: .leading, spacing: tokens.spaceSm) {
+                        HStack(spacing: tokens.spaceSm) {
+                            Text("Show in Finder").font(.system(size: tokens.textSm)).foregroundColor(isHoveringHistory ? textHoverColor : textColor)
+                            Image(systemName: "arrow.up.right").font(.system(size: tokens.text2Xs)).foregroundColor(isHoveringHistory ? textHoverColor : textColor)
                         }
                         VersionInfoInline()
                     }
                     Spacer()
                 }
             }
-            .buttonStyle(.plain).padding(.horizontal, 16).padding(.vertical, 12)
+            .buttonStyle(.plain).padding(.horizontal, tokens.spaceXl).padding(.vertical, tokens.spaceLg)
             .onHover { hovering in isHoveringHistory = hovering }
             Divider()
             ScrollView {
@@ -1026,11 +1026,11 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                         }) {
                             let entryInfo = extractTitleAndSubtitle(from: entry)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(entry.date).font(.system(size: 11)).foregroundColor(.secondary)
-                                Text(entryInfo.title).font(.system(size: 13, weight: .regular)).lineLimit(1).foregroundColor(.primary)
-                                Text(entryInfo.subtitle).font(.system(size: 11)).lineLimit(1).foregroundColor(.secondary)
+                                Text(entry.date).font(.system(size: tokens.textXs)).foregroundColor(.secondary)
+                                Text(entryInfo.title).font(.system(size: tokens.textSm, weight: .regular)).lineLimit(1).foregroundColor(.primary)
+                                Text(entryInfo.subtitle).font(.system(size: tokens.textXs)).lineLimit(1).foregroundColor(.secondary)
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.vertical, 8)
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, tokens.spaceXl).padding(.vertical, tokens.spaceMd)
                             .background(RoundedRectangle(cornerRadius: 4).fill(backgroundColor(for: entry)))
                         }
                         .buttonStyle(PlainButtonStyle()).contentShape(Rectangle())
@@ -1042,7 +1042,6 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
             .scrollIndicators(.never)
         }
     }
-    
     // MARK: - Projects Lens Sidebar
     var projectsLensSidebar: some View {
         let textColor = colorScheme == .light ? Color.gray : Color.gray.opacity(0.8)
