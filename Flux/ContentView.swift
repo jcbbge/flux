@@ -155,6 +155,7 @@ struct ContentView: View {
     @State private var isHoveringSize: Bool = false
     @State private var fontSize: CGFloat = 18
     @State private var blinkCount: Int = 0
+    @State private var timeRemaining: Int = 900  // 15 minutes
     @State private var isBlinking = false
     @State private var shouldShowGray = true // New state to control color
     @State private var lastClickTime: Date? = nil
@@ -832,7 +833,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                 // Results count
                 HStack {
                     Text("\(searchResults.count) results")
-                    .font(.system(size: tokens.textSecondary))
+                    .font(.custom(selectedSecondaryFont, size: tokens.textSecondary))
                     .foregroundColor(.gray)
                     Spacer()
                 }
@@ -856,7 +857,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                         // Preview with match
                                         if !result.preview.isEmpty {
                                             Text(result.preview)
-                                            .font(.system(size: tokens.textSecondary))
+                                            .font(.custom(selectedSecondaryFont, size: tokens.textSecondary))
                                             .foregroundColor(.gray)
                                             .lineLimit(2)
                                         }
@@ -891,7 +892,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
             // Footer hint
             HStack {
                 Text("↑↓ navigate • ↵ select • esc close")
-                    .font(.system(size: tokens.textSecondary))
+                    .font(.custom(selectedSecondaryFont, size: tokens.textSecondary))
                     .foregroundColor(.gray)
                 Spacer()
             }
@@ -989,8 +990,8 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                 VStack(alignment: .leading, spacing: tokens.spaceSm) {
                     ForEach(Array(currentEntryMetadata.sorted(by: { $0.key < $1.key })), id: \.key) { key, value in
                         HStack(alignment: .top, spacing: tokens.spaceSm) {
-                            Text(key + ":").font(.system(size: tokens.textSecondary)).foregroundColor(textColor).frame(width: 60, alignment: .trailing)
-                            Text(value).font(.system(size: tokens.textSecondary)).foregroundColor(colorScheme == .light ? .black : .white).lineLimit(2)
+                            Text(key + ":").font(.custom(selectedSecondaryFont, size: tokens.textSecondary)).foregroundColor(textColor).frame(width: 60, alignment: .trailing)
+                            Text(value).font(.custom(selectedSecondaryFont, size: tokens.textSecondary)).foregroundColor(colorScheme == .light ? .black : .white).lineLimit(2)
                             Spacer()
                         }
                     }
@@ -1002,7 +1003,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                 HStack {
                     VStack(alignment: .leading, spacing: tokens.spaceSm) {
                         HStack(spacing: tokens.spaceSm) {
-                            Text("Show in Finder").font(.system(size: tokens.textSecondary)).foregroundColor(isHoveringHistory ? textHoverColor : textColor)
+                            Text("Show in Finder").font(.custom(selectedSecondaryFont, size: tokens.textSecondary)).foregroundColor(isHoveringHistory ? textHoverColor : textColor)
                             Image(systemName: "arrow.up.right").font(.system(size: tokens.textSecondary)).foregroundColor(isHoveringHistory ? textHoverColor : textColor)
                         }
                         VersionInfoInline()
@@ -1028,9 +1029,9 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                         }) {
                             let entryInfo = extractTitleAndSubtitle(from: entry)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(entry.date).font(.system(size: tokens.textSecondary)).foregroundColor(.secondary)
-                                Text(entryInfo.title).font(.system(size: tokens.textSecondary, weight: .regular)).lineLimit(1).foregroundColor(.primary)
-                                Text(entryInfo.subtitle).font(.system(size: tokens.textSecondary)).lineLimit(1).foregroundColor(.secondary)
+                                Text(entry.date).font(.custom(selectedSecondaryFont, size: tokens.textSecondary)).foregroundColor(.secondary)
+                                Text(entryInfo.title).font(.custom(selectedSecondaryFont, size: tokens.textSecondary, weight: .regular)).lineLimit(1).foregroundColor(.primary)
+                                Text(entryInfo.subtitle).font(.custom(selectedSecondaryFont, size: tokens.textSecondary)).lineLimit(1).foregroundColor(.secondary)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, tokens.spaceXl).padding(.vertical, tokens.spaceMd)
                             .background(RoundedRectangle(cornerRadius: 4).fill(backgroundColor(for: entry)))
@@ -1052,7 +1053,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
             Button(action: { addNewProject() }) {
                 HStack {
                     Image(systemName: "plus").font(.system(size: tokens.textSecondary))
-                    Text("Add Project").font(.system(size: tokens.textSecondary))
+                    Text("Add Project").font(.custom(selectedSecondaryFont, size: tokens.textSecondary))
                     Spacer()
                 }
                 .foregroundColor(isHoveringNewEntry ? textHoverColor : textColor)
@@ -1069,7 +1070,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                 HStack {
                                     HStack(spacing: tokens.spaceSm) {
                                         Circle().fill(project.hasWorkspace ? Color.green.opacity(0.6) : Color.gray.opacity(0.4)).frame(width: 6, height: 6)
-                                        Text(project.displayName).font(.system(size: tokens.textSecondary)).lineLimit(1).foregroundColor(colorScheme == .light ? .primary : .white)
+                                        Text(project.displayName).font(.custom(selectedSecondaryFont, size: tokens.textSecondary)).lineLimit(1).foregroundColor(colorScheme == .light ? .primary : .white)
                                     }
                                     Spacer()
                                     if project.hasWorkspace { Image(systemName: "folder").font(.system(size: tokens.textSecondary)).foregroundColor(.gray.opacity(0.5)) }
@@ -1084,14 +1085,14 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                         Button(action: { selectedProjectForWorkspace = nil; workspaceFiles = [] }) {
                             HStack {
                                 Image(systemName: "chevron.left").font(.system(size: tokens.textSecondary))
-                                Text("Projects").font(.system(size: tokens.textSecondary))
+                                Text("Projects").font(.custom(selectedSecondaryFont, size: tokens.textSecondary))
                                 Spacer()
                             }
                             .foregroundColor(textColor).padding(.horizontal, tokens.spaceXl).padding(.vertical, tokens.spaceMd)
                         }
                         .buttonStyle(.plain)
                         Divider()
-                        Text(selectedProjectForWorkspace?.name ?? "").font(.system(size: tokens.textSecondary, weight: .medium)).foregroundColor(textColor).padding(.horizontal, tokens.spaceXl).padding(.vertical, tokens.spaceMd)
+                        Text(selectedProjectForWorkspace?.name ?? "").font(.custom(selectedSecondaryFont, size: tokens.textSecondary, weight: .medium)).foregroundColor(textColor).padding(.horizontal, tokens.spaceXl).padding(.vertical, tokens.spaceMd)
                         Divider()
                         ForEach(workspaceFiles) { item in
                             Button(action: {
@@ -1099,7 +1100,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                             }) {
                                 HStack {
                                     Image(systemName: item.isDirectory ? "folder" : "doc.text").font(.system(size: tokens.textSecondary)).foregroundColor(item.isDirectory ? .blue : .gray)
-                                    Text(item.name).font(.system(size: tokens.textSecondary)).lineLimit(1).foregroundColor(colorScheme == .light ? .primary : .white)
+                                    Text(item.name).font(.custom(selectedSecondaryFont, size: tokens.textSecondary)).lineLimit(1).foregroundColor(colorScheme == .light ? .primary : .white)
                                     Spacer()
                                 }
                                 .padding(.horizontal, tokens.spaceXl).padding(.vertical, tokens.spaceSm)
@@ -1292,7 +1293,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                     fontSize = fontSizes[nextIndex]
                                 }
                             }
-                            .font(.system(size: tokens.textSecondary))
+                            .font(.custom(selectedSecondaryFont, size: tokens.textSecondary))
                             .buttonStyle(.plain)
                             .foregroundColor(isHoveringSize ? textHoverColor : textColor)
                             .onHover { hovering in
@@ -1312,7 +1313,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                 selectedFont = "Lato-Regular"
                                 currentRandomFont = ""
                             }
-                            .font(.system(size: tokens.textSecondary))
+                            .font(.custom(selectedSecondaryFont, size: tokens.textSecondary))
                             .buttonStyle(.plain)
                             .foregroundColor(hoveredFont == "Lato" ? textHoverColor : textColor)
                             .onHover { hovering in
@@ -1332,7 +1333,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                 selectedFont = "Arial"
                                 currentRandomFont = ""
                             }
-                            .font(.system(size: tokens.textSecondary))
+                            .font(.custom(selectedSecondaryFont, size: tokens.textSecondary))
                             .buttonStyle(.plain)
                             .foregroundColor(hoveredFont == "Arial" ? textHoverColor : textColor)
                             .onHover { hovering in
@@ -1352,7 +1353,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                 selectedFont = ".AppleSystemUIFont"
                                 currentRandomFont = ""
                             }
-                            .font(.system(size: tokens.textSecondary))
+                            .font(.custom(selectedSecondaryFont, size: tokens.textSecondary))
                             .buttonStyle(.plain)
                             .foregroundColor(hoveredFont == "System" ? textHoverColor : textColor)
                             .onHover { hovering in
@@ -1372,7 +1373,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                 selectedFont = "Times New Roman"
                                 currentRandomFont = ""
                             }
-                            .font(.system(size: tokens.textSecondary))
+                            .font(.custom(selectedSecondaryFont, size: tokens.textSecondary))
                             .buttonStyle(.plain)
                             .foregroundColor(hoveredFont == "Serif" ? textHoverColor : textColor)
                             .onHover { hovering in
@@ -1395,7 +1396,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                     selectedSecondaryFont = monospacedFonts[nextIndex]
                                 }
                             }
-                            .font(.system(size: tokens.textSecondary))
+                            .font(.custom(selectedSecondaryFont, size: tokens.textSecondary))
                             .buttonStyle(.plain)
                             .foregroundColor(hoveredSecondaryFont ? textHoverColor : textColor)
                             .onHover { hovering in
@@ -1417,7 +1418,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                     currentRandomFont = randomFont
                                 }
                             }
-                            .font(.system(size: tokens.textSecondary))
+                            .font(.custom(selectedSecondaryFont, size: tokens.textSecondary))
                             .buttonStyle(.plain)
                             .foregroundColor(hoveredFont == "Random" ? textHoverColor : textColor)
                             .onHover { hovering in
@@ -1686,7 +1687,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                 createNewEntry()
                             }) {
                                 Text("New Entry")
-                                    .font(.system(size: tokens.textSecondary))
+                                    .font(.custom(selectedSecondaryFont, size: tokens.textSecondary))
                             }
                             .buttonStyle(.plain)
                             .foregroundColor(isHoveringNewEntry ? textHoverColor : textColor)
@@ -1708,7 +1709,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                 summarizeCurrentEntry()
                             }) {
                                 Text("Summarize")
-                                    .font(.system(size: tokens.textSecondary))
+                                    .font(.custom(selectedSecondaryFont, size: tokens.textSecondary))
                             }
                             .buttonStyle(.plain)
                             .foregroundColor(isHoveringSummarize ? textHoverColor : textColor)
@@ -2354,14 +2355,14 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                             let entryInfo = extractTitleAndSubtitle(from: entry)
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack {
-                                    Text(entry.date).font(.system(size: tokens.textSecondary)).foregroundColor(.secondary)
+                                    Text(entry.date).font(.custom(selectedSecondaryFont, size: tokens.textSecondary)).foregroundColor(.secondary)
                                     Spacer()
                                     if !openEntryTodos.isEmpty {
                                         Text("\(openEntryTodos.count)").font(.system(size: tokens.textSecondary, weight: .medium)).foregroundColor(.white).padding(.horizontal, tokens.spaceSm).padding(.vertical, 2).background(Color.black).cornerRadius(10)
                                     }
                                 }
-                                Text(entryInfo.title).font(.system(size: tokens.textSecondary, weight: .regular)).lineLimit(1).foregroundColor(.primary)
-                                Text(entryInfo.subtitle).font(.system(size: tokens.textSecondary)).lineLimit(1).foregroundColor(.secondary)
+                                Text(entryInfo.title).font(.custom(selectedSecondaryFont, size: tokens.textSecondary, weight: .regular)).lineLimit(1).foregroundColor(.primary)
+                                Text(entryInfo.subtitle).font(.custom(selectedSecondaryFont, size: tokens.textSecondary)).lineLimit(1).foregroundColor(.secondary)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, tokens.spaceXl).padding(.vertical, tokens.spaceMd)
                             .background(selectedEntryId == entry.id ? Color.gray.opacity(0.1) : Color.clear)
