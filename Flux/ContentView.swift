@@ -851,7 +851,8 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                     VStack(alignment: .leading, spacing: tokens.spaceSm) {
                                         // Filename
                                         Text(result.filename)
-                                        .font(.system(size: tokens.textSecondary, weight: .medium))
+                                        .font(.custom(selectedSecondaryFont, size: tokens.textSecondary))
+                                        .fontWeight(.medium)
                                         .lineLimit(1)
                                         
                                         // Preview with match
@@ -1030,7 +1031,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                             let entryInfo = extractTitleAndSubtitle(from: entry)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(entry.date).font(.custom(selectedSecondaryFont, size: tokens.textSecondary)).foregroundColor(.secondary)
-                                Text(entryInfo.title).font(.custom(selectedSecondaryFont, size: tokens.textSecondary, weight: .regular)).lineLimit(1).foregroundColor(.primary)
+                                Text(entryInfo.title).font(.custom(selectedSecondaryFont, size: tokens.textSecondary)).fontWeight(.regular).lineLimit(1).foregroundColor(.primary)
                                 Text(entryInfo.subtitle).font(.custom(selectedSecondaryFont, size: tokens.textSecondary)).lineLimit(1).foregroundColor(.secondary)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, tokens.spaceXl).padding(.vertical, tokens.spaceMd)
@@ -1092,7 +1093,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                         }
                         .buttonStyle(.plain)
                         Divider()
-                        Text(selectedProjectForWorkspace?.name ?? "").font(.custom(selectedSecondaryFont, size: tokens.textSecondary, weight: .medium)).foregroundColor(textColor).padding(.horizontal, tokens.spaceXl).padding(.vertical, tokens.spaceMd)
+                        Text(selectedProjectForWorkspace?.name ?? "").font(.custom(selectedSecondaryFont, size: tokens.textSecondary)).fontWeight(.medium).foregroundColor(textColor).padding(.horizontal, tokens.spaceXl).padding(.vertical, tokens.spaceMd)
                         Divider()
                         ForEach(workspaceFiles) { item in
                             Button(action: {
@@ -2342,7 +2343,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
         return VStack(spacing: 0) {
             HStack {
                 let openCount = todos.filter { !$0.isDone }.count
-                Text("\(openCount) open").font(.system(size: tokens.textSecondary)).foregroundColor(textColor)
+                Text("\(openCount) open").font(.custom(selectedSecondaryFont, size: tokens.textSecondary)).foregroundColor(textColor)
                 Spacer()
             }
             .padding(.horizontal, tokens.spaceXl).padding(.vertical, tokens.spaceLg)
@@ -2358,10 +2359,10 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                     Text(entry.date).font(.custom(selectedSecondaryFont, size: tokens.textSecondary)).foregroundColor(.secondary)
                                     Spacer()
                                     if !openEntryTodos.isEmpty {
-                                        Text("\(openEntryTodos.count)").font(.system(size: tokens.textSecondary, weight: .medium)).foregroundColor(.white).padding(.horizontal, tokens.spaceSm).padding(.vertical, 2).background(Color.black).cornerRadius(10)
+                                        Text("\(openEntryTodos.count)").font(.custom(selectedSecondaryFont, size: tokens.textSecondary)).fontWeight(.medium).foregroundColor(.white).padding(.horizontal, tokens.spaceSm).padding(.vertical, 2).background(Color.black).cornerRadius(10)
                                     }
                                 }
-                                Text(entryInfo.title).font(.custom(selectedSecondaryFont, size: tokens.textSecondary, weight: .regular)).lineLimit(1).foregroundColor(.primary)
+                                Text(entryInfo.title).font(.custom(selectedSecondaryFont, size: tokens.textSecondary)).fontWeight(.regular).lineLimit(1).foregroundColor(.primary)
                                 Text(entryInfo.subtitle).font(.custom(selectedSecondaryFont, size: tokens.textSecondary)).lineLimit(1).foregroundColor(.secondary)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, tokens.spaceXl).padding(.vertical, tokens.spaceMd)
