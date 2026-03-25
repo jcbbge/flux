@@ -1110,6 +1110,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                         }
                     ))
                     .background(Color(colorScheme == .light ? .white : .black))
+                    .font(.custom(selectedFont, size: fontSize))
                     .foregroundColor(colorScheme == .light ? Color(red: 0.20, green: 0.20, blue: 0.20) : Color(red: 0.9, green: 0.9, blue: 0.9))
                     .scrollContentBackground(.hidden)
                     .scrollIndicators(.never)
