@@ -573,6 +573,31 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
 
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
+    // MARK: - Entry Title/Subtitle Extraction
+    private func extractTitleAndSubtitle(from entry: HumanEntry) -> (title: String, subtitle: String) {
+        let documentsDirectory = getDocumentsDirectory()
+        let fileURL = documentsDirectory.appendingPathComponent(entry.filename)
+        
+        guard let content = try? String(contentsOf: fileURL, encoding: .utf8) else {
+            return (title: entry.previewText, subtitle: "")
+        }
+        
+        // Strip frontmatter if present
+        var cleanedContent = content
+        if content.hasPrefix("---") {
+            if let endIndex = content.dropFirst(3).range(of: "---")?.upperBound {
+                cleanedContent = String(content[endIndex...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        
+        let lines = cleanedContent.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        
+        let title = lines.first?.trimmingCharacters(in: .whitespaces) ?? entry.previewText
+        let subtitle = lines.dropFirst().first?.trimmingCharacters(in: .whitespaces) ?? ""
+        
+        return (title: title, subtitle: subtitle)
+    }
+
     
     // MARK: - Project Discovery
     private func discoverProjects() {
@@ -959,28 +984,33 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                 loadEntry(entry: entry)
                             }
                         }) {
+                            let entryInfo = extractTitleAndSubtitle(from: entry)
                             HStack(alignment: .top) {
-                                VStack(alignment: .leading, spacing: 4) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    // Date - top, right aligned, subtle
                                     HStack {
-                                        Text(entry.previewText).font(.system(size: 13)).lineLimit(1).foregroundColor(.primary)
                                         Spacer()
-                                        if hoveredEntryId == entry.id {
-                                            HStack(spacing: 8) {
-                                                Button(action: { exportEntryAsPDF(entry: entry) }) {
-                                                    Image(systemName: "arrow.down.circle").font(.system(size: 11))
-                                                        .foregroundColor(hoveredExportId == entry.id ? (colorScheme == .light ? .black : .white) : (colorScheme == .light ? .gray : .gray.opacity(0.8)))
-                                                }
-                                                .buttonStyle(.plain).help("Export entry as PDF")
-                                                .onHover { hovering in withAnimation(.easeInOut(duration: 0.2)) { hoveredExportId = hovering ? entry.id : nil } }
-                                                Button(action: { deleteEntry(entry: entry) }) {
-                                                    Image(systemName: "trash").font(.system(size: 11)).foregroundColor(hoveredTrashId == entry.id ? .red : .gray)
-                                                }
-                                                .buttonStyle(.plain)
-                                                .onHover { hovering in withAnimation(.easeInOut(duration: 0.2)) { hoveredTrashId = hovering ? entry.id : nil } }
-                                            }
-                                        }
+                                        Text(entry.date).font(.system(size: 11)).foregroundColor(.secondary)
                                     }
-                                    Text(entry.date).font(.system(size: 12)).foregroundColor(.secondary)
+                                    // Title - middle, first line, not bold
+                                    Text(entryInfo.title).font(.system(size: 13, weight: .regular)).lineLimit(1).foregroundColor(.primary)
+                                    // Subtitle - bottom, next line, subtle
+                                    Text(entryInfo.subtitle).font(.system(size: 11)).lineLimit(1).foregroundColor(.secondary)
+                                }
+                                if hoveredEntryId == entry.id {
+                                    HStack(spacing: 8) {
+                                        Button(action: { exportEntryAsPDF(entry: entry) }) {
+                                            Image(systemName: "arrow.down.circle").font(.system(size: 11))
+                                                .foregroundColor(hoveredExportId == entry.id ? (colorScheme == .light ? .black : .white) : (colorScheme == .light ? .gray : .gray.opacity(0.8)))
+                                        }
+                                        .buttonStyle(.plain).help("Export entry as PDF")
+                                        .onHover { hovering in withAnimation(.easeInOut(duration: 0.2)) { hoveredExportId = hovering ? entry.id : nil } }
+                                        Button(action: { deleteEntry(entry: entry) }) {
+                                            Image(systemName: "trash").font(.system(size: 11)).foregroundColor(hoveredTrashId == entry.id ? .red : .gray)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .onHover { hovering in withAnimation(.easeInOut(duration: 0.2)) { hoveredTrashId = hovering ? entry.id : nil } }
+                                    }
                                 }
                             }
                             .frame(maxWidth: .infinity).padding(.horizontal, 16).padding(.vertical, 8)
@@ -2259,16 +2289,21 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                     ForEach(entriesWithTodos) { entry in
                         let openEntryTodos = todos.filter { $0.entryId == entry.id && !$0.isDone }
                         Button(action: { selectedEntryId = entry.id; loadEntry(entry: entry) }) {
+                            let entryInfo = extractTitleAndSubtitle(from: entry)
                             HStack {
-                                VStack(alignment: .leading, spacing: 4) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    // Date - top, right aligned, subtle
                                     HStack {
-                                        Text(entry.previewText).font(.system(size: 13)).lineLimit(1).foregroundColor(.primary)
                                         Spacer()
-                                        if !openEntryTodos.isEmpty {
-                                            Text("\(openEntryTodos.count)").font(.system(size: 10, weight: .medium)).foregroundColor(.white).padding(.horizontal, 6).padding(.vertical, 2).background(Color.black).cornerRadius(10)
-                                        }
+                                        Text(entry.date).font(.system(size: 11)).foregroundColor(.secondary)
                                     }
-                                    Text(entry.date).font(.system(size: 12)).foregroundColor(.secondary)
+                                    // Title - middle, first line, not bold
+                                    Text(entryInfo.title).font(.system(size: 13, weight: .regular)).lineLimit(1).foregroundColor(.primary)
+                                    // Subtitle - bottom, next line, subtle
+                                    Text(entryInfo.subtitle).font(.system(size: 11)).lineLimit(1).foregroundColor(.secondary)
+                                }
+                                if !openEntryTodos.isEmpty {
+                                    Text("\(openEntryTodos.count)").font(.system(size: 10, weight: .medium)).foregroundColor(.white).padding(.horizontal, 6).padding(.vertical, 2).background(Color.black).cornerRadius(10)
                                 }
                             }
                             .frame(maxWidth: .infinity).padding(.horizontal, 16).padding(.vertical, 8)
