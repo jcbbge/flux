@@ -790,9 +790,9 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
         return HStack(spacing: 0) {
             Spacer()
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 16)
-        .padding(.bottom, 8)
+        .padding(.horizontal, tokens.spaceXl)
+        .padding(.top, tokens.spaceXl)
+        .padding(.bottom, tokens.spaceMd)
     }
     
     var searchView: some View {
