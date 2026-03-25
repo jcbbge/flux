@@ -1049,12 +1049,12 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
         return VStack(spacing: 0) {
             Button(action: { addNewProject() }) {
                 HStack {
-                    Image(systemName: "plus").font(.system(size: 12))
-                    Text("Add Project").font(.system(size: 13))
+                    Image(systemName: "plus").font(.system(size: tokens.textSm))
+                    Text("Add Project").font(.system(size: tokens.textSm))
                     Spacer()
                 }
                 .foregroundColor(isHoveringNewEntry ? textHoverColor : textColor)
-                .padding(.horizontal, 16).padding(.vertical, 12)
+                .padding(.horizontal, tokens.spaceXl).padding(.vertical, tokens.spaceLg)
             }
             .buttonStyle(.plain)
             .onHover { hovering in isHoveringNewEntry = hovering; if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() } }
@@ -1065,14 +1065,14 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                         ForEach(projects) { project in
                             Button(action: { loadWorkspace(for: project) }) {
                                 HStack {
-                                    HStack(spacing: 4) {
+                                    HStack(spacing: tokens.spaceSm) {
                                         Circle().fill(project.hasWorkspace ? Color.green.opacity(0.6) : Color.gray.opacity(0.4)).frame(width: 6, height: 6)
-                                        Text(project.displayName).font(.system(size: 13)).lineLimit(1).foregroundColor(colorScheme == .light ? .primary : .white)
+                                        Text(project.displayName).font(.system(size: tokens.textSm)).lineLimit(1).foregroundColor(colorScheme == .light ? .primary : .white)
                                     }
                                     Spacer()
-                                    if project.hasWorkspace { Image(systemName: "folder").font(.system(size: 10)).foregroundColor(.gray.opacity(0.5)) }
+                                    if project.hasWorkspace { Image(systemName: "folder").font(.system(size: tokens.text2Xs)).foregroundColor(.gray.opacity(0.5)) }
                                 }
-                                .padding(.horizontal, 16).padding(.vertical, 8)
+                                .padding(.horizontal, tokens.spaceXl).padding(.vertical, tokens.spaceMd)
                                 .background(selectedProjectForWorkspace?.id == project.id ? Color.gray.opacity(0.1) : Color.clear)
                             }
                             .buttonStyle(.plain)
@@ -1081,26 +1081,26 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                     } else {
                         Button(action: { selectedProjectForWorkspace = nil; workspaceFiles = [] }) {
                             HStack {
-                                Image(systemName: "chevron.left").font(.system(size: 11))
-                                Text("Projects").font(.system(size: 12))
+                                Image(systemName: "chevron.left").font(.system(size: tokens.textXs))
+                                Text("Projects").font(.system(size: tokens.textXs))
                                 Spacer()
                             }
-                            .foregroundColor(textColor).padding(.horizontal, 16).padding(.vertical, 8)
+                            .foregroundColor(textColor).padding(.horizontal, tokens.spaceXl).padding(.vertical, tokens.spaceMd)
                         }
                         .buttonStyle(.plain)
                         Divider()
-                        Text(selectedProjectForWorkspace?.name ?? "").font(.system(size: 11, weight: .medium)).foregroundColor(textColor).padding(.horizontal, 16).padding(.vertical, 8)
+                        Text(selectedProjectForWorkspace?.name ?? "").font(.system(size: tokens.textXs, weight: .medium)).foregroundColor(textColor).padding(.horizontal, tokens.spaceXl).padding(.vertical, tokens.spaceMd)
                         Divider()
                         ForEach(workspaceFiles) { item in
                             Button(action: {
                                 if item.isDirectory { loadDirectoryContents(at: item.path) } else { loadWorkspaceFile(at: item.path) }
                             }) {
                                 HStack {
-                                    Image(systemName: item.isDirectory ? "folder" : "doc.text").font(.system(size: 11)).foregroundColor(item.isDirectory ? .blue : .gray)
-                                    Text(item.name).font(.system(size: 12)).lineLimit(1).foregroundColor(colorScheme == .light ? .primary : .white)
+                                    Image(systemName: item.isDirectory ? "folder" : "doc.text").font(.system(size: tokens.textXs)).foregroundColor(item.isDirectory ? .blue : .gray)
+                                    Text(item.name).font(.system(size: tokens.textXs)).lineLimit(1).foregroundColor(colorScheme == .light ? .primary : .white)
                                     Spacer()
                                 }
-                                .padding(.horizontal, 16).padding(.vertical, 6)
+                                .padding(.horizontal, tokens.spaceXl).padding(.vertical, tokens.spaceSm)
                             }
                             .buttonStyle(.plain)
                         }
@@ -1110,7 +1110,6 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
             .scrollIndicators(.never)
         }
     }
-    
     var body: some View {
         let navHeight: CGFloat = 68
         let textColor = colorScheme == .light ? Color.gray : Color.gray.opacity(0.8)
