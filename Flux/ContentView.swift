@@ -1104,7 +1104,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                     .scrollContentBackground(.hidden)
                     .scrollIndicators(.never)
                     .lineSpacing(lineHeight)
-                    .frame(maxWidth: 650)
+                    .frame(maxWidth: 975)
                     
           
                     .id("\(selectedFont)-\(fontSize)-\(colorScheme)")
