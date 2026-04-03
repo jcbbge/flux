@@ -1288,13 +1288,19 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                     HStack {
                         // Font buttons (moved to left)
                         HStack(spacing: tokens.spaceMd) {
-                            Button(fontSizeButtonTitle) {
+                            Button(action: {
                                 if let currentIndex = fontSizes.firstIndex(of: fontSize) {
                                     let nextIndex = (currentIndex + 1) % fontSizes.count
                                     fontSize = fontSizes[nextIndex]
                                 }
+                            }) {
+                                HStack(spacing: tokens.spaceSm) {
+                                    Image(systemName: "textformat.size")
+                                    if fontSize < 24 {
+                                        Text(fontSizeButtonTitle)
+                                    }
+                                }
                             }
-                            .font(.custom(selectedSecondaryFont, size: tokens.textSecondary))
                             .buttonStyle(.plain)
                             .foregroundColor(isHoveringSize ? textHoverColor : textColor)
                             .onHover { hovering in
@@ -1310,12 +1316,17 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                             Text("•")
                                 .foregroundColor(.gray)
                             
-                            Button("Lato") {
+                            Button(action: {
                                 selectedFont = "Lato-Regular"
                                 currentRandomFont = ""
+                            }) {
+                                HStack(spacing: tokens.spaceSm) {
+                                    Text("Aa").fontWeight(.light)
+                                    if fontSize < 24 {
+                                        Text("Lato")
+                                    }
+                                }
                             }
-                            .font(.custom(selectedSecondaryFont, size: tokens.textSecondary))
-                            .buttonStyle(.plain)
                             .foregroundColor(hoveredFont == "Lato" ? textHoverColor : textColor)
                             .onHover { hovering in
                                 hoveredFont = hovering ? "Lato" : nil

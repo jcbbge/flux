@@ -52,72 +52,141 @@ struct FluxEntry: Identifiable, Equatable {
     }
     
     static func parse(from path: URL) -> FluxEntry? {
+        let filename = path.lastPathComponent
+
+        guard path.pathExtension.lowercased() == "md" else {
+            print("[FluxEntry.parse] Skipping non-markdown file: \(filename)")
+            return nil
+        }
+
         do {
             let content = try String(contentsOf: path, encoding: .utf8)
-            let filename = path.lastPathComponent
-            // Direct extraction: timestamp is first 19 chars (yyyy-MM-dd-HH-mm-ss)
-            let prefix = filename.prefix(19)
-            guard prefix.count == 19 && filename.contains("-") else { return nil }
-            let dateString = String(prefix)
-            guard let date = DateFormatterCache.shared.date(from: dateString, format: "yyyy-MM-dd-HH-mm-ss") else { return nil }
-            let displayDate = DateFormatterCache.shared.string(from: date, format: "MMM d")
-            let uuid = UUID()
-            
-            // Parse YAML frontmatter
-            let meta = parseFrontmatter(from: content)
-            
-            return FluxEntry(id: uuid, date: displayDate, filename: filename, content: content, fluxMeta: meta)
+            let parsedDate = parseDate(from: filename, fileURL: path)
+            let displayDate = DateFormatterCache.shared.string(from: parsedDate, format: "MMM d")
+            let meta = parseFrontmatter(from: content, filename: filename)
+
+            return FluxEntry(
+                id: UUID(),
+                date: displayDate,
+                filename: filename,
+                content: content,
+                fluxMeta: meta
+            )
         } catch {
-            print("Parse error for \(path): \(error)")
+            print("[FluxEntry.parse] Failed to read \(filename): \(error)")
             return nil
         }
     }
-    
-    static func parseFrontmatter(from content: String) -> FluxMeta? {
-        // Check for frontmatter delimiters
-        guard content.hasPrefix("---\n") else { return nil }
-        
-        // Find the closing ---
-        let rest = content.dropFirst(4) // Skip "---\n"
-        guard let closeRange = rest.range(of: "\n---") else { return nil }
+
+    private static func parseDate(from filename: String, fileURL: URL) -> Date {
+        let basename = fileURL.deletingPathExtension().lastPathComponent
+
+        if basename.count >= 10 {
+            let dayPrefix = String(basename.prefix(10))
+            if let date = DateFormatterCache.shared.date(from: dayPrefix, format: "yyyy-MM-dd") {
+                return date
+            }
+        }
+
+        if basename.count >= 19 {
+            let timestampPrefix = String(basename.prefix(19))
+            if let date = DateFormatterCache.shared.date(from: timestampPrefix, format: "yyyy-MM-dd-HH-mm-ss") {
+                return date
+            }
+        }
+
+        if let attributes = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
+           let fallbackDate = attributes[.creationDate] as? Date ?? attributes[.modificationDate] as? Date {
+            print("[FluxEntry.parse] Falling back to file timestamp for \(filename)")
+            return fallbackDate
+        }
+
+        print("[FluxEntry.parse] Falling back to current date for \(filename)")
+        return Date()
+    }
+
+    static func parseFrontmatter(from content: String, filename: String = "<unknown>") -> FluxMeta {
+        let defaultMeta = FluxMeta(fluxType: FluxType.journal.rawValue)
+
+        guard content.hasPrefix("---\n") else {
+            print("[FluxEntry.parseFrontmatter] No frontmatter in \(filename); using defaults")
+            return defaultMeta
+        }
+
+        let rest = content.dropFirst(4)
+        guard let closeRange = rest.range(of: "\n---") else {
+            print("[FluxEntry.parseFrontmatter] Unterminated frontmatter in \(filename); using defaults")
+            return defaultMeta
+        }
+
         let yamlBlock = String(rest[..<closeRange.lowerBound])
-        
-        // Simple YAML parse (key: value)
         var meta = [String: Any]()
+
         yamlBlock.split(separator: "\n", omittingEmptySubsequences: false).forEach { line in
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            guard !trimmed.isEmpty, !trimmed.hasPrefix("#") else { return } // Skip empty/comment lines
-            
-            // Find first colon
-            guard let colonIndex = trimmed.firstIndex(of: ":") else { return }
+            guard !trimmed.isEmpty, !trimmed.hasPrefix("#") else { return }
+
+            guard let colonIndex = trimmed.firstIndex(of: ":") else {
+                print("[FluxEntry.parseFrontmatter] Skipping malformed line in \(filename): \(trimmed)")
+                return
+            }
+
             let key = String(trimmed[..<colonIndex])
             let valueStart = trimmed.index(after: colonIndex)
             let value = String(trimmed[valueStart...]).trimmingCharacters(in: .whitespaces)
-            
-            // Parse value (basic: array or string)
+
             if value.hasPrefix("[") && value.hasSuffix("]") {
                 let inner = value.dropFirst().dropLast()
-                let tags = inner.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-                meta[key] = tags
+                let list = inner
+                    .split(separator: ",")
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                    .filter { !$0.isEmpty }
+
+                if key == "links" {
+                    meta[key] = list.compactMap { UUID(uuidString: $0) }
+                } else {
+                    meta[key] = list
+                }
             } else if key == "links" {
-                let links = value.split(separator: ",").compactMap { UUID(uuidString: $0.trimmingCharacters(in: .whitespaces)) }
+                let links = value
+                    .split(separator: ",")
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                    .compactMap { UUID(uuidString: $0) }
                 meta[key] = links
             } else {
                 meta[key] = value
             }
         }
-        // Build FluxMeta from parsed
-        guard let fluxType = meta["fluxType"] as? String else { return nil }
+
+        let fluxType = (meta["fluxType"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if fluxType == nil || fluxType?.isEmpty == true {
+            print("[FluxEntry.parseFrontmatter] Missing fluxType in \(filename); defaulting to \(FluxType.journal.rawValue)")
+        }
+
+        let resolvedFluxType: String
+        if let fluxType, !fluxType.isEmpty {
+            resolvedFluxType = fluxType
+        } else {
+            resolvedFluxType = FluxType.journal.rawValue
+        }
         let fluxTitle = meta["fluxTitle"] as? String
         let category = meta["category"] as? String
         let summary = meta["summary"] as? String
         let tags = meta["tags"] as? [String] ?? []
         let links = meta["links"] as? [UUID] ?? []
         let insights = meta["insights"] as? [String] ?? []
-        // Embedding skipped for basic parse
-        return FluxMeta(fluxTitle: fluxTitle, fluxType: fluxType, category: category, summary: summary, tags: tags, links: links, insights: insights)
+
+        return FluxMeta(
+            fluxTitle: fluxTitle,
+            fluxType: resolvedFluxType,
+            category: category,
+            summary: summary,
+            tags: tags,
+            links: links,
+            insights: insights
+        )
     }
-    
+
     static func generateFilename(for type: String, project: String? = nil) -> String {
         let timestamp = DateFormatterCache.shared.string(from: Date(), format: "yyyy-MM-dd-HH-mm-ss")
         if let project = project {

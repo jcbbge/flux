@@ -81,11 +81,52 @@ struct VersionInfoInline: View {
                 .foregroundColor(textColor)
             
             Spacer()
+            AIStatusView()
         }
         .onAppear {
             // Compute once on appear, not during render
             indicator = VersionInfo.statusIndicator
             hash = VersionInfo.shortCommit
         }
+    }
+}
+
+struct AIStatusView: View {
+    @ObservedObject var aiService = AIService.shared
+
+    private var iconName: String {
+        "brain"
+    }
+
+    private var tint: Color {
+        switch aiService.status {
+        case .active:
+            return Color.green.opacity(0.8)
+        case .degraded:
+            return Color.orange
+        case .offline, .unknown:
+            return Color.gray
+        }
+    }
+
+    private var tooltipText: String {
+        switch aiService.status {
+        case .active:
+            return "AI connected"
+        case .degraded(let reason):
+            return "AI degraded: \(reason)"
+        case .offline(let reason):
+            return "AI offline: \(reason)"
+        case .unknown:
+            return "AI offline: unknown"
+        }
+    }
+
+    var body: some View {
+        Image(systemName: iconName)
+            .font(.system(size: 10))
+            .foregroundColor(tint)
+            .help(tooltipText)
+            .accessibilityLabel(tooltipText)
     }
 }
