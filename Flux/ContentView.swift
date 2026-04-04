@@ -10,6 +10,7 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 import PDFKit
+import CryptoKit
 
 // MARK: - DateFormatter Cache (Performance Fix)
 struct DateFormatterCache {
@@ -2118,7 +2119,11 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
             let savedDate = entry.date
             let savedBodyContent = bodyContent
             let savedContent = contentToSave
-            let savedFileURL = fileURL
+            let savedFilePath = fileURL.path
+            let savedContentHash = SHA256
+                .hash(data: Data(savedBodyContent.utf8))
+                .map { String(format: "%02x", $0) }
+                .joined()
 
             Task.detached(priority: .utility) {
                 let savedMeta = FluxEntry.parseFrontmatter(from: savedContent, filename: savedFilename)
@@ -2132,15 +2137,12 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
 
                 do {
                     let enrichedMeta = try await AIService.shared.enrichEntry(savedFluxEntry)
-                    let enrichedContent = savedFluxEntry.embedMeta(enrichedMeta)
-                    try enrichedContent.write(to: savedFileURL, atomically: true, encoding: .utf8)
-
-                    await MainActor.run {
-                        if selectedEntryId == savedEntryId,
-                           let selectedEntry = entryDictionary[savedEntryId] {
-                            loadEntry(entry: selectedEntry)
-                        }
-                    }
+                    try await SurrealDBClient.shared.upsertNote(
+                        path: savedFilePath,
+                        contentHash: savedContentHash,
+                        entry: savedFluxEntry,
+                        meta: enrichedMeta
+                    )
                 } catch {
                     // Fire-and-forget enrichment: silence errors
                 }
