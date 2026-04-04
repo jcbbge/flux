@@ -175,6 +175,8 @@ struct ContentView: View {
     @State private var isHoveringSummarize = false
     @State private var isHoveringClock = false
     @State private var isHoveringHistory = false
+    @State private var showingSettings = false
+    @State private var apiKeyInput = ""
     @State private var isHoveringHistoryText = false
     @State private var isHoveringHistoryPath = false
     @State private var isHoveringHistoryArrow = false
@@ -184,8 +186,7 @@ struct ContentView: View {
     @State private var backspaceDisabled = false // Add state for backspace toggle
     @State private var isHoveringBackspaceToggle = false // Add state for backspace toggle hover
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-    let entryHeight: CGFloat = 40
-    
+    let entryHeight: CGFloat = 40    
     // Debounced save timer
     @State private var pendingSaveTimer: Timer? = nil
     private let saveDebounceInterval: TimeInterval = 2.0
@@ -1000,8 +1001,8 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                 .padding(.horizontal, tokens.spaceXl).padding(.vertical, tokens.spaceMd)
                 Divider()
             }
-            Button(action: { NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: getDocumentsDirectory().path) }) {
-                HStack {
+            HStack(spacing: tokens.spaceMd) {
+                Button(action: { NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: getDocumentsDirectory().path) }) {
                     VStack(alignment: .leading, spacing: tokens.spaceSm) {
                         HStack(spacing: tokens.spaceSm) {
                             Text("Show in Finder").font(.custom(selectedSecondaryFont, size: tokens.textSecondary)).foregroundColor(isHoveringHistory ? textHoverColor : textColor)
@@ -1009,11 +1010,45 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                         }
                         VersionInfoInline()
                     }
-                    Spacer()
+                }
+                .buttonStyle(.plain)
+                .onHover { hovering in isHoveringHistory = hovering }
+
+                Spacer()
+
+                Button(action: {
+                    showingSettings.toggle()
+                }) {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: tokens.textSecondary))
+                        .foregroundColor(textColor)
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showingSettings, arrowEdge: .top) {
+                    VStack(alignment: .leading, spacing: tokens.spaceSm) {
+                        SecureField("AI Provider Key", text: $apiKeyInput)
+                            .textFieldStyle(.roundedBorder)
+                            .onSubmit {
+                                UserDefaults.standard.set(apiKeyInput, forKey: "aiProviderKey")
+                            }
+
+                        Text("Reads PERPLEXITY_API_KEY env var if set")
+                            .font(.custom(selectedSecondaryFont, size: tokens.textSecondary))
+                            .foregroundColor(textColor)
+                    }
+                    .padding(tokens.spaceLg)
+                    .frame(width: 320)
+                }
+                .onChange(of: showingSettings) {
+                    if showingSettings {
+                        apiKeyInput = UserDefaults.standard.string(forKey: "aiProviderKey") ?? ""
+                    } else {
+                        UserDefaults.standard.set(apiKeyInput, forKey: "aiProviderKey")
+                    }
                 }
             }
-            .buttonStyle(.plain).padding(.horizontal, tokens.spaceXl).padding(.vertical, tokens.spaceLg)
-            .onHover { hovering in isHoveringHistory = hovering }
+            .padding(.horizontal, tokens.spaceXl)
+            .padding(.vertical, tokens.spaceLg)
             Divider()
             ScrollView {
                 LazyVStack(spacing: 0) {
@@ -2109,6 +2144,39 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                     }
                 } catch {
                     print("Error saving summary: \(error)")
+                }
+            }
+
+            let savedEntryId = entry.id
+            let savedFilename = entry.filename
+            let savedDate = entry.date
+            let savedBodyContent = bodyContent
+            let savedContent = contentToSave
+            let savedFileURL = fileURL
+
+            Task.detached(priority: .utility) {
+                let savedMeta = FluxEntry.parseFrontmatter(from: savedContent, filename: savedFilename)
+                let savedFluxEntry = FluxEntry(
+                    id: savedEntryId,
+                    date: savedDate,
+                    filename: savedFilename,
+                    content: savedBodyContent,
+                    fluxMeta: savedMeta
+                )
+
+                do {
+                    let enrichedMeta = try await AIService.shared.enrichEntry(savedFluxEntry)
+                    let enrichedContent = savedFluxEntry.embedMeta(enrichedMeta)
+                    try enrichedContent.write(to: savedFileURL, atomically: true, encoding: .utf8)
+
+                    await MainActor.run {
+                        if selectedEntryId == savedEntryId,
+                           let selectedEntry = entryDictionary[savedEntryId] {
+                            loadEntry(entry: selectedEntry)
+                        }
+                    }
+                } catch {
+                    // Fire-and-forget enrichment: silence errors
                 }
             }
         } catch {
