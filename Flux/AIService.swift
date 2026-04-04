@@ -1,24 +1,22 @@
 import Foundation
 import SwiftUI
 
-// AIProvider — swappable config
 struct AIProvider {
     let name: String
-    let endpoint: URL
-    let model: String
-    var apiKey: String
+    let baseURL: URL
+    let chatModel: String
+    let embedModel: String
 
-    static var perplexity: AIProvider {
+    static var local: AIProvider {
         AIProvider(
-            name: "Perplexity",
-            endpoint: URL(string: "https://api.perplexity.ai/v1/chat/completions")!,
-            model: "sonar",
-            apiKey: ""
+            name: "Ollama (local)",
+            baseURL: URL(string: "http://localhost:8001")!,
+            chatModel: "qwen2.5:0.5b",
+            embedModel: "nomic-embed-text"
         )
     }
 }
 
-// AIServiceStatus
 enum AIServiceStatus: Equatable {
     case unknown
     case active
@@ -52,106 +50,122 @@ actor AIService: ObservableObject {
 
     private init(session: URLSession = .shared) {
         self.session = session
-
-        var defaultProvider = AIProvider.perplexity
-        if let loadedKey = try? Self.loadAPIKey() {
-            defaultProvider.apiKey = loadedKey
-        }
-        self.provider = defaultProvider
+        self.provider = .local
     }
 
-    // Key loading: env -> UserDefaults -> throws
-    private static func loadAPIKey() throws -> String {
-        if let envKey = ProcessInfo.processInfo.environment["PERPLEXITY_API_KEY"]?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !envKey.isEmpty {
-            return envKey
-        }
-
-        if let defaultsKey = UserDefaults.standard.string(forKey: "aiProviderKey")?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !defaultsKey.isEmpty {
-            return defaultsKey
-        }
-
-        throw AIServiceError.missingAPIKey
-    }
-
-    // Update provider at runtime (for future settings UI)
     func setProvider(_ provider: AIProvider) {
         self.provider = provider
     }
 
-    // Core chat call — OpenAI-compatible
-    // Updates status on every call (success or failure)
     func chat(systemPrompt: String, userPrompt: String) async throws -> String {
-        let requestPayload: ChatRequest
+        let activeProvider = try resolvedProvider()
+        let endpoint = activeProvider.baseURL.appendingPathComponent("api/chat")
+
+        let payload = OllamaChatRequest(
+            model: activeProvider.chatModel,
+            messages: [
+                .init(role: "system", content: systemPrompt),
+                .init(role: "user", content: userPrompt)
+            ],
+            stream: false
+        )
+
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 30
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(payload)
+
+        let data: Data
+        let response: URLResponse
 
         do {
-            let activeProvider = try resolvedProvider()
-            requestPayload = ChatRequest(
-                model: activeProvider.model,
-                messages: [
-                    .init(role: "system", content: systemPrompt),
-                    .init(role: "user", content: userPrompt)
-                ]
-            )
-
-            var request = URLRequest(url: activeProvider.endpoint)
-            request.httpMethod = "POST"
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.setValue("Bearer \(activeProvider.apiKey)", forHTTPHeaderField: "Authorization")
-            request.timeoutInterval = 30
-            request.httpBody = try JSONEncoder().encode(requestPayload)
-
-            let (data, response): (Data, URLResponse)
-            do {
-                (data, response) = try await session.data(for: request)
-            } catch {
-                await setStatus(.offline("Network unavailable"))
-                throw AIServiceError.transport(error)
-            }
-
-            guard let httpResponse = response as? HTTPURLResponse else {
-                await setStatus(.degraded("Response parse error"))
-                throw AIServiceError.malformedJSON("Missing HTTP response")
-            }
-
-            guard (200...299).contains(httpResponse.statusCode) else {
-                let body = String(data: data, encoding: .utf8) ?? ""
-                switch httpResponse.statusCode {
-                case 401, 403:
-                    await setStatus(.offline("Invalid API key"))
-                case 429:
-                    await setStatus(.offline("Token limit reached — check your Perplexity quota"))
-                case 500...599:
-                    await setStatus(.degraded("Provider error (\(httpResponse.statusCode))"))
-                default:
-                    await setStatus(.offline("Request failed (\(httpResponse.statusCode))"))
-                }
-                throw AIServiceError.httpStatus(httpResponse.statusCode, body)
-            }
-
-            do {
-                let decoded = try JSONDecoder().decode(ChatResponse.self, from: data)
-                guard let content = decoded.choices.first?.message.content.trimmingCharacters(in: .whitespacesAndNewlines),
-                      !content.isEmpty else {
-                    await setStatus(.degraded("Response parse error"))
-                    throw AIServiceError.emptyResponse
-                }
-
-                await setStatus(.active)
-                return content
-            } catch {
-                await setStatus(.degraded("Response parse error"))
-                throw AIServiceError.malformedJSON(String(data: data, encoding: .utf8) ?? "<non-utf8>")
-            }
-        } catch let error as AIServiceError {
-            if case .missingAPIKey = error {
-                await setStatus(.offline("Missing API key"))
-            }
-            throw error
+            (data, response) = try await session.data(for: request)
         } catch {
-            await setStatus(.offline("Network unavailable"))
+            if isConnectionRefused(error) {
+                await setStatus(.offline("Ollama not running — start with: ollama serve"))
+            } else {
+                await setStatus(.offline("Network unavailable"))
+            }
             throw AIServiceError.transport(error)
+        }
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            await setStatus(.degraded("Response parse error"))
+            throw AIServiceError.malformedJSON("Missing HTTP response")
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            await setStatus(.degraded("Ollama error (\(httpResponse.statusCode))"))
+            throw AIServiceError.httpStatus(httpResponse.statusCode, body)
+        }
+
+        do {
+            let decoded = try JSONDecoder().decode(OllamaChatResponse.self, from: data)
+            guard let content = decoded.message?.content.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !content.isEmpty else {
+                await setStatus(.degraded("Response parse error"))
+                throw AIServiceError.emptyResponse
+            }
+
+            await setStatus(.active)
+            return content
+        } catch {
+            await setStatus(.degraded("Response parse error"))
+            throw AIServiceError.malformedJSON(String(data: data, encoding: .utf8) ?? "<non-utf8>")
+        }
+    }
+
+    func embed(_ input: String) async throws -> [Float] {
+        let activeProvider = try resolvedProvider()
+        let endpoint = activeProvider.baseURL.appendingPathComponent("api/embed")
+
+        let payload = OllamaEmbedRequest(model: activeProvider.embedModel, input: input)
+
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 30
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(payload)
+
+        let data: Data
+        let response: URLResponse
+
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            if isConnectionRefused(error) {
+                await setStatus(.offline("Ollama not running — start with: ollama serve"))
+            } else {
+                await setStatus(.offline("Network unavailable"))
+            }
+            throw AIServiceError.transport(error)
+        }
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            await setStatus(.degraded("Response parse error"))
+            throw AIServiceError.malformedJSON("Missing HTTP response")
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            await setStatus(.degraded("Ollama error (\(httpResponse.statusCode))"))
+            throw AIServiceError.httpStatus(httpResponse.statusCode, body)
+        }
+
+        do {
+            let decoded = try JSONDecoder().decode(OllamaEmbedResponse.self, from: data)
+            guard let vector = decoded.embeddings.first, !vector.isEmpty else {
+                await setStatus(.degraded("Response parse error"))
+                throw AIServiceError.emptyResponse
+            }
+
+            await setStatus(.active)
+            return vector
+        } catch {
+            await setStatus(.degraded("Response parse error"))
+            throw AIServiceError.malformedJSON(String(data: data, encoding: .utf8) ?? "<non-utf8>")
         }
     }
 
@@ -211,23 +225,28 @@ actor AIService: ObservableObject {
     }
 
     private func resolvedProvider() throws -> AIProvider {
-        var activeProvider = provider
-
-        if activeProvider.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            activeProvider.apiKey = try Self.loadAPIKey()
-            provider = activeProvider
-        }
-
-        guard !activeProvider.endpoint.absoluteString.isEmpty else {
+        guard !provider.baseURL.absoluteString.isEmpty else {
             throw AIServiceError.invalidURL
         }
-
-        return activeProvider
+        return provider
     }
 
     @MainActor
     private func setStatus(_ status: AIServiceStatus) {
         self.status = status
+    }
+
+    private func isConnectionRefused(_ error: Error) -> Bool {
+        guard let urlError = error as? URLError else {
+            return false
+        }
+
+        switch urlError.code {
+        case .cannotConnectToHost, .cannotFindHost:
+            return true
+        default:
+            return false
+        }
     }
 
     private func extractJSONObject(from text: String) -> String {
@@ -250,7 +269,6 @@ actor AIService: ObservableObject {
 }
 
 enum AIServiceError: LocalizedError {
-    case missingAPIKey
     case invalidURL
     case transport(Error)
     case httpStatus(Int, String)
@@ -259,8 +277,6 @@ enum AIServiceError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .missingAPIKey:
-            return "Missing API key. Set PPLX_API_KEY or UserDefaults key aiProviderKey."
         case .invalidURL:
             return "AI provider URL is invalid."
         case .transport(let error):
@@ -275,9 +291,10 @@ enum AIServiceError: LocalizedError {
     }
 }
 
-private struct ChatRequest: Codable {
+private struct OllamaChatRequest: Codable {
     let model: String
     let messages: [ChatMessage]
+    let stream: Bool
 }
 
 private struct ChatMessage: Codable {
@@ -285,12 +302,17 @@ private struct ChatMessage: Codable {
     let content: String
 }
 
-private struct ChatResponse: Codable {
-    let choices: [Choice]
+private struct OllamaChatResponse: Codable {
+    let message: ChatMessage?
+}
 
-    struct Choice: Codable {
-        let message: ChatMessage
-    }
+private struct OllamaEmbedRequest: Codable {
+    let model: String
+    let input: String
+}
+
+private struct OllamaEmbedResponse: Codable {
+    let embeddings: [[Float]]
 }
 
 private struct EnrichmentResponse: Codable {

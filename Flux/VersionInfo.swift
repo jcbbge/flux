@@ -109,8 +109,8 @@ struct AIStatusView: View {
         switch aiService.status {
         case .degraded(let reason):
             return "AI degraded: \(reason)"
-        case .offline(let reason):
-            return "AI offline: \(reason)"
+        case .offline:
+            return "AI offline: Ollama not running"
         case .unknown, .active:
             return ""
         }

@@ -57,7 +57,7 @@ actor SurrealDBClient: ObservableObject {
         throw SurrealDBClientError.unexpectedPayload
     }
 
-    func upsertNote(path: String, contentHash: String, meta: FluxMeta, embedding: [Float]?) async throws {
+    func upsertNote(path: String, contentHash: String, entry: FluxEntry, meta: FluxMeta) async throws {
         let recordID = sqlRecordID(path)
         let escapedPath = sqlString(path)
         let escapedHash = sqlString(contentHash)
@@ -65,9 +65,8 @@ actor SurrealDBClient: ObservableObject {
         let summarySQL = sqlOptionalString(meta.summary)
         let tagsSQL = sqlStringArray(meta.tags)
         let insightsSQL = sqlStringArray(meta.insights)
-        let embeddingSQL = sqlEmbedding(embedding)
 
-        let query = """
+        let metaQuery = """
         UPSERT flux_note:`\(recordID)` CONTENT {
             path: '\(escapedPath)',
             content_hash: '\(escapedHash)',
@@ -75,12 +74,24 @@ actor SurrealDBClient: ObservableObject {
             summary: \(summarySQL),
             tags: \(tagsSQL),
             insights: \(insightsSQL),
+            embedding: NONE,
+            updated_at: time::now()
+        };
+        """
+
+        _ = try await sql(metaQuery)
+
+        let generatedEmbedding = try await AIService.shared.embed(entry.content)
+        let embeddingSQL = sqlEmbedding(generatedEmbedding)
+
+        let embeddingQuery = """
+        UPDATE flux_note:`\(recordID)` SET {
             embedding: \(embeddingSQL),
             updated_at: time::now()
         };
         """
 
-        _ = try await sql(query)
+        _ = try await sql(embeddingQuery)
     }
 
     func fetchSimilar(to embedding: [Float], limit: Int) async throws -> [String] {
@@ -133,9 +144,8 @@ actor SurrealDBClient: ObservableObject {
         return "[\(escaped)]"
     }
 
-    private func sqlEmbedding(_ values: [Float]?) -> String {
-        guard let values else { return "NONE" }
-        return "[\(values.map { String($0) }.joined(separator: ", "))]"
+    private func sqlEmbedding(_ values: [Float]) -> String {
+        "[\(values.map { String($0) }.joined(separator: ", "))]"
     }
 }
 

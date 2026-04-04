@@ -175,8 +175,6 @@ struct ContentView: View {
     @State private var isHoveringSummarize = false
     @State private var isHoveringClock = false
     @State private var isHoveringHistory = false
-    @State private var showingSettings = false
-    @State private var apiKeyInput = ""
     @State private var isHoveringHistoryText = false
     @State private var isHoveringHistoryPath = false
     @State private var isHoveringHistoryArrow = false
@@ -1015,37 +1013,6 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                 .onHover { hovering in isHoveringHistory = hovering }
 
                 Spacer()
-
-                Button(action: {
-                    showingSettings.toggle()
-                }) {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: tokens.textSecondary))
-                        .foregroundColor(textColor)
-                }
-                .buttonStyle(.plain)
-                .popover(isPresented: $showingSettings, arrowEdge: .top) {
-                    VStack(alignment: .leading, spacing: tokens.spaceSm) {
-                        SecureField("AI Provider Key", text: $apiKeyInput)
-                            .textFieldStyle(.roundedBorder)
-                            .onSubmit {
-                                UserDefaults.standard.set(apiKeyInput, forKey: "aiProviderKey")
-                            }
-
-                        Text("Reads PERPLEXITY_API_KEY env var if set")
-                            .font(.custom(selectedSecondaryFont, size: tokens.textSecondary))
-                            .foregroundColor(textColor)
-                    }
-                    .padding(tokens.spaceLg)
-                    .frame(width: 320)
-                }
-                .onChange(of: showingSettings) {
-                    if showingSettings {
-                        apiKeyInput = UserDefaults.standard.string(forKey: "aiProviderKey") ?? ""
-                    } else {
-                        UserDefaults.standard.set(apiKeyInput, forKey: "aiProviderKey")
-                    }
-                }
             }
             .padding(.horizontal, tokens.spaceXl)
             .padding(.vertical, tokens.spaceLg)
@@ -1061,8 +1028,7 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                 }
                                 selectedEntryId = entry.id
                                 loadEntry(entry: entry)
-                            }
-                        }) {
+                            }                        }) {
                             let entryInfo = extractTitleAndSubtitle(from: entry)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(entry.date).font(.custom(selectedSecondaryFont, size: tokens.textSecondary)).foregroundColor(.secondary)
