@@ -94,39 +94,40 @@ struct VersionInfoInline: View {
 struct AIStatusView: View {
     @ObservedObject var aiService = AIService.shared
 
-    private var iconName: String {
-        "brain"
-    }
-
     private var tint: Color {
         switch aiService.status {
-        case .active:
-            return Color.green.opacity(0.8)
         case .degraded:
             return Color.orange
-        case .offline, .unknown:
+        case .offline:
             return Color.gray
+        case .unknown, .active:
+            return .clear
         }
     }
 
     private var tooltipText: String {
         switch aiService.status {
-        case .active:
-            return "AI connected"
         case .degraded(let reason):
             return "AI degraded: \(reason)"
         case .offline(let reason):
             return "AI offline: \(reason)"
-        case .unknown:
-            return "AI offline: unknown"
+        case .unknown, .active:
+            return ""
         }
     }
 
     var body: some View {
-        Image(systemName: iconName)
-            .font(.system(size: 10))
-            .foregroundColor(tint)
-            .help(tooltipText)
-            .accessibilityLabel(tooltipText)
+        Group {
+            switch aiService.status {
+            case .degraded, .offline:
+                Image(systemName: "brain")
+                    .font(.system(size: 10))
+                    .foregroundColor(tint)
+                    .help(tooltipText)
+                    .accessibilityLabel(tooltipText)
+            case .unknown, .active:
+                EmptyView()
+            }
+        }
     }
 }

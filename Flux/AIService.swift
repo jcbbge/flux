@@ -62,7 +62,7 @@ actor AIService: ObservableObject {
 
     // Key loading: env -> UserDefaults -> throws
     private static func loadAPIKey() throws -> String {
-        if let envKey = ProcessInfo.processInfo.environment["PPLX_API_KEY"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+        if let envKey = ProcessInfo.processInfo.environment["PERPLEXITY_API_KEY"]?.trimmingCharacters(in: .whitespacesAndNewlines),
            !envKey.isEmpty {
             return envKey
         }
@@ -207,15 +207,6 @@ actor AIService: ObservableObject {
         } catch {
             await setStatus(.degraded("Response parse error"))
             throw AIServiceError.malformedJSON(raw)
-        }
-    }
-
-    // Health check — call on app launch, sets status
-    func ping() async {
-        do {
-            _ = try await chat(systemPrompt: "You are a health check endpoint.", userPrompt: "Reply with OK")
-        } catch {
-            // chat() already sets the status
         }
     }
 

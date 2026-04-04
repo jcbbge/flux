@@ -21,8 +21,8 @@ all: build
 
 build:
 	@echo "$(BLUE)Building $(APP_NAME)...$(NC)"
-	xcodebuild -project $(PROJECT) \
-		-scheme $(SCHEME) \
+	@mkdir -p $(BUILD_DIR)
+	xcodebuild -project $(PROJECT) \		-scheme $(SCHEME) \
 		-configuration Release \
 		-derivedDataPath $(BUILD_DIR) \
 		-destination "platform=macOS" \
