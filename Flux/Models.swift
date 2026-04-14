@@ -331,7 +331,9 @@ class FluxDataStore: ObservableObject {
                     id: id,
                     date: displayDate,
                     filename: filename,
-                    previewText: String(previewText)
+                    previewText: String(previewText),
+                    entryType: .text,
+                    videoFilename: nil
                 )
                 
                 return (entry, sortDate, content)

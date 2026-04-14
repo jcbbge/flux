@@ -33,12 +33,35 @@ struct DateFormatterCache {
     }
 }
 
+enum EntryType {
+    case text
+    case video
+}
+
 struct HumanEntry: Identifiable {
     let id: UUID
     let date: String
     let filename: String
     var previewText: String
-    
+    var entryType: EntryType
+    var videoFilename: String?
+
+    static func createVideoEntry() -> HumanEntry {
+        let id = UUID()
+        let now = Date()
+        let dateString = DateFormatterCache.shared.string(from: now, format: "yyyy-MM-dd-HH-mm-ss")
+        let displayDate = DateFormatterCache.shared.string(from: now, format: "MMM d")
+        let videoFilename = "[\(id)]-[\(dateString)].mov"
+        return HumanEntry(
+            id: id,
+            date: displayDate,
+            filename: "[\(id)]-[\(dateString)].md",
+            previewText: "Video Entry",
+            entryType: .video,
+            videoFilename: videoFilename
+        )
+    }
+
     static func createNew() -> HumanEntry {
         let id = UUID()
         let now = Date()
@@ -52,7 +75,9 @@ struct HumanEntry: Identifiable {
             id: id,
             date: displayDate,
             filename: "\(dateString)-\(idPrefix).md",
-            previewText: ""
+            previewText: "",
+            entryType: .text,
+            videoFilename: nil
         )
     }
     static func createToday() -> HumanEntry {
@@ -65,7 +90,9 @@ struct HumanEntry: Identifiable {
             id: id,
             date: displayDate,
             filename: "\(dateString).md",
-            previewText: ""
+            previewText: "",
+            entryType: .text,
+            videoFilename: nil
         )
     }
 }
@@ -123,6 +150,14 @@ enum LensMode: String, CaseIterable {
 
 struct ContentView: View {
     private let headerString = "\n\n"
+
+    private struct VideoPermissionPopoverItem: Identifiable {
+        let id = UUID()
+        let message: String
+        let buttonLabel: String
+        let settingsPane: String
+    }
+
     @State private var entries: [HumanEntry] = []
     @State private var entryDictionary: [UUID: HumanEntry] = [:]
     @State private var projects: [Project] = []
@@ -184,6 +219,17 @@ struct ContentView: View {
     @State private var didCopyPrompt: Bool = false // Add state for copy prompt feedback
     @State private var backspaceDisabled = false // Add state for backspace toggle
     @State private var isHoveringBackspaceToggle = false // Add state for backspace toggle hover
+    @State private var showingVideoRecording = false
+    @State private var isHoveringVideoButton = false
+    @State private var currentVideoURL: URL? = nil
+    @State private var isPreparingVideoRecording = false
+    @State private var preparedCameraManager: CameraManager? = nil
+    @State private var videoRecordingPreparationID: UUID? = nil
+    @State private var showingVideoPermissionPopover = false
+    @State private var videoPermissionPopoverItems: [VideoPermissionPopoverItem] = []
+    @State private var videoPermissionPopoverFallbackMessage: String? = nil
+    @State private var didCopyTranscript: Bool = false
+    @State private var selectedVideoHasTranscript = false
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     let entryHeight: CGFloat = 40    
     // Debounced save timer
@@ -255,7 +301,27 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
             .appendingPathComponent("EntriesBackup", isDirectory: true)
         return ContentView.ensureDirectoryExists(at: targetDirectory, label: "Flux backups directory")
     }()
-    
+
+    private let videosDirectory: URL = {
+        let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Freewrite")
+            .appendingPathComponent("Videos")
+        if !FileManager.default.fileExists(atPath: directory.path) {
+            do {
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            } catch {
+                print("Error creating videos directory: \(error)")
+            }
+        }
+        return directory
+    }()
+
+    private let thumbnailMemoryCache: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        cache.countLimit = 512
+        return cache
+    }()
+
     // Add shared prompt constant
     private let aiChatPrompt = """
     below is my journal entry. wyt? talk through it with me like a friend. don't therpaize me and give me a whole breakdown, don't repeat my thoughts with headings. really take all of this, and tell me back stuff truly as if you're an old homie.
@@ -294,7 +360,257 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
     private func getDocumentsDirectory() -> URL {
         return documentsDirectory
     }
-    
+
+    private func getVideosDirectory() -> URL { videosDirectory }
+
+    private func getVideoEntryDirectory(for videoFilename: String) -> URL {
+        let baseName = (videoFilename as NSString).deletingPathExtension
+        return getVideosDirectory().appendingPathComponent(baseName, isDirectory: true)
+    }
+
+    private func getManagedVideoURL(for filename: String) -> URL {
+        getVideoEntryDirectory(for: filename).appendingPathComponent(filename)
+    }
+
+    private func getVideoThumbnailURL(for filename: String) -> URL {
+        getVideoEntryDirectory(for: filename).appendingPathComponent("thumbnail.jpg")
+    }
+
+    private func getVideoTranscriptURL(for filename: String) -> URL {
+        getVideoEntryDirectory(for: filename).appendingPathComponent("transcript.md")
+    }
+
+    @discardableResult
+    private func ensureVideoEntryDirectoryExists(for videoFilename: String) throws -> URL {
+        let directory = getVideoEntryDirectory(for: videoFilename)
+        if !fileManager.fileExists(atPath: directory.path) {
+            try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+        return directory
+    }
+
+    private func getVideoURL(for filename: String) -> URL {
+        let managedVideoURL = getManagedVideoURL(for: filename)
+        if fileManager.fileExists(atPath: managedVideoURL.path) { return managedVideoURL }
+        let flatVideosURL = getVideosDirectory().appendingPathComponent(filename)
+        if fileManager.fileExists(atPath: flatVideosURL.path) { return flatVideosURL }
+        let rootVideosURL = getDocumentsDirectory().appendingPathComponent(filename)
+        if fileManager.fileExists(atPath: rootVideosURL.path) { return rootVideosURL }
+        return managedVideoURL
+    }
+
+    private func hasVideoAsset(for filename: String) -> Bool {
+        let managed = getManagedVideoURL(for: filename)
+        if fileManager.fileExists(atPath: managed.path) { return true }
+        let flat = getVideosDirectory().appendingPathComponent(filename)
+        if fileManager.fileExists(atPath: flat.path) { return true }
+        let root = getDocumentsDirectory().appendingPathComponent(filename)
+        return fileManager.fileExists(atPath: root.path)
+    }
+
+    private func resolvedVideoFilename(for entry: HumanEntry) -> String? {
+        guard entry.entryType == .video else { return nil }
+        if let vf = entry.videoFilename, !vf.isEmpty { return vf }
+        return entry.filename.replacingOccurrences(of: ".md", with: ".mov")
+    }
+
+    private func persistThumbnail(_ image: NSImage, for videoFilename: String) {
+        do {
+            let directory = try ensureVideoEntryDirectoryExists(for: videoFilename)
+            let thumbnailURL = directory.appendingPathComponent("thumbnail.jpg")
+            guard let tiff = image.tiffRepresentation,
+                  let bitmapRep = NSBitmapImageRep(data: tiff),
+                  let imageData = bitmapRep.representation(using: .jpeg, properties: [.compressionFactor: 0.82]) else { return }
+            try imageData.write(to: thumbnailURL, options: .atomic)
+        } catch {
+            print("Error saving thumbnail: \(error)")
+        }
+    }
+
+    private func loadThumbnailImage(for videoFilename: String) -> NSImage? {
+        let cacheKey = videoFilename as NSString
+        if let cached = thumbnailMemoryCache.object(forKey: cacheKey) { return cached }
+        let thumbnailURL = getVideoThumbnailURL(for: videoFilename)
+        if fileManager.fileExists(atPath: thumbnailURL.path),
+           let image = NSImage(contentsOf: thumbnailURL) {
+            thumbnailMemoryCache.setObject(image, forKey: cacheKey)
+            return image
+        }
+        let videoURL = getVideoURL(for: videoFilename)
+        guard fileManager.fileExists(atPath: videoURL.path),
+              let generated = generateVideoThumbnail(from: videoURL) else { return nil }
+        persistThumbnail(generated, for: videoFilename)
+        thumbnailMemoryCache.setObject(generated, forKey: cacheKey)
+        return generated
+    }
+
+    private func deleteVideoAssets(for videoFilename: String) {
+        thumbnailMemoryCache.removeObject(forKey: videoFilename as NSString)
+        let managedDirectory = getVideoEntryDirectory(for: videoFilename)
+        let candidates = [
+            managedDirectory.appendingPathComponent(videoFilename),
+            managedDirectory.appendingPathComponent("thumbnail.jpg"),
+            managedDirectory.appendingPathComponent("transcript.md"),
+            getVideosDirectory().appendingPathComponent(videoFilename),
+            getDocumentsDirectory().appendingPathComponent(videoFilename)
+        ]
+        for url in candidates where fileManager.fileExists(atPath: url.path) {
+            try? fileManager.removeItem(at: url)
+        }
+        if fileManager.fileExists(atPath: managedDirectory.path) {
+            try? fileManager.removeItem(at: managedDirectory)
+        }
+    }
+
+    private func loadTranscriptText(for videoFilename: String) -> String? {
+        let transcriptURL = getVideoTranscriptURL(for: videoFilename)
+        guard fileManager.fileExists(atPath: transcriptURL.path),
+              let content = try? String(contentsOf: transcriptURL, encoding: .utf8) else { return nil }
+        let cleaned = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        return cleaned.isEmpty ? nil : cleaned
+    }
+
+    private func previewTextFromTranscript(_ transcript: String?) -> String {
+        guard let transcript else { return "Video Entry" }
+        let normalized = transcript
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return "Video Entry" }
+        var preview = String(normalized.prefix(10))
+        while let last = preview.last, (!last.isLetter && !last.isNumber) { preview.removeLast() }
+        return preview.isEmpty ? "Video Entry" : preview + "..."
+    }
+
+    private func videoPreviewText(for videoFilename: String) -> String {
+        previewTextFromTranscript(loadTranscriptText(for: videoFilename))
+    }
+
+    private func copyTranscriptForSelectedVideoEntry() {
+        guard let selectedEntryId,
+              let entry = entries.first(where: { $0.id == selectedEntryId }),
+              let vf = resolvedVideoFilename(for: entry),
+              let transcript = loadTranscriptText(for: vf) else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(transcript, forType: .string)
+        didCopyTranscript = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { didCopyTranscript = false }
+    }
+
+    private func startVideoRecordingPreflight() {
+        guard !isPreparingVideoRecording, !showingVideoRecording else { return }
+        showingVideoPermissionPopover = false
+        videoPermissionPopoverItems = []
+        videoPermissionPopoverFallbackMessage = nil
+        let preparationID = UUID()
+        let manager = CameraManager()
+        videoRecordingPreparationID = preparationID
+        preparedCameraManager = manager
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { isPreparingVideoRecording = true }
+        manager.onReadyToRecord = { [weak manager] in
+            guard let manager else { return }
+            DispatchQueue.main.async {
+                finishVideoRecordingPreflight(preparationID: preparationID, manager: manager, presentationDelay: 0.5)
+            }
+        }
+        manager.onCannotRecord = { [weak manager] in
+            guard let manager else { return }
+            DispatchQueue.main.async {
+                guard self.videoRecordingPreparationID == preparationID else { return }
+                let payload = self.videoPermissionPopoverPayload(
+                    cameraGranted: manager.permissionGranted,
+                    microphoneGranted: manager.microphonePermissionGranted,
+                    speechGranted: manager.speechPermissionGranted
+                )
+                self.videoPermissionPopoverItems = payload.items
+                self.videoPermissionPopoverFallbackMessage = payload.fallbackMessage
+                self.showingVideoPermissionPopover = true
+                self.clearVideoRecordingPreparationState()
+            }
+        }
+        manager.checkPermissions()
+    }
+
+    private func finishVideoRecordingPreflight(preparationID: UUID, manager: CameraManager, presentationDelay: TimeInterval = 0) {
+        let presentRecorder = {
+            guard videoRecordingPreparationID == preparationID else { return }
+            videoRecordingPreparationID = nil
+            manager.onReadyToRecord = nil
+            manager.onCannotRecord = nil
+            preparedCameraManager = manager
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                isPreparingVideoRecording = false
+                showingVideoRecording = true
+            }
+        }
+        if presentationDelay > 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + presentationDelay) { presentRecorder() }
+        } else {
+            presentRecorder()
+        }
+    }
+
+    private func clearVideoRecordingPreparationState() {
+        preparedCameraManager?.onReadyToRecord = nil
+        preparedCameraManager?.onCannotRecord = nil
+        videoRecordingPreparationID = nil
+        isPreparingVideoRecording = false
+        preparedCameraManager = nil
+    }
+
+    private func videoPermissionPopoverPayload(cameraGranted: Bool, microphoneGranted: Bool, speechGranted: Bool) -> (items: [VideoPermissionPopoverItem], fallbackMessage: String?) {
+        var items: [VideoPermissionPopoverItem] = []
+        if !cameraGranted { items.append(VideoPermissionPopoverItem(message: "Hey, we need camera permission.", buttonLabel: "Open Camera Settings", settingsPane: "Privacy_Camera")) }
+        if !microphoneGranted { items.append(VideoPermissionPopoverItem(message: "Hey, we need microphone permission.", buttonLabel: "Open Microphone Settings", settingsPane: "Privacy_Microphone")) }
+        if !speechGranted { items.append(VideoPermissionPopoverItem(message: "Hey, we need speech recognition permission.", buttonLabel: "Open Speech Settings", settingsPane: "Privacy_SpeechRecognition")) }
+        if items.isEmpty { return (items: [], fallbackMessage: "Could not prepare camera right now. Please try again.") }
+        return (items: items, fallbackMessage: nil)
+    }
+
+    private func openVideoPermissionSettings(_ settingsPane: String) {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(settingsPane)") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    private func saveVideoEntry(from videoURL: URL, transcript: String?) {
+        let newEntry = HumanEntry.createVideoEntry()
+        guard let videoFilename = newEntry.videoFilename else { return }
+        do {
+            let videoEntryDirectory = try ensureVideoEntryDirectoryExists(for: videoFilename)
+            let videoDestURL = videoEntryDirectory.appendingPathComponent(videoFilename)
+            try fileManager.copyItem(at: videoURL, to: videoDestURL)
+            if let thumbnail = generateVideoThumbnail(from: videoDestURL) {
+                persistThumbnail(thumbnail, for: videoFilename)
+            }
+            if let transcript, !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                let transcriptURL = videoEntryDirectory.appendingPathComponent("transcript.md")
+                try transcript.write(to: transcriptURL, atomically: true, encoding: .utf8)
+            }
+            let mdURL = getDocumentsDirectory().appendingPathComponent(newEntry.filename)
+            try "Video Entry".write(to: mdURL, atomically: true, encoding: .utf8)
+            let previewText = previewTextFromTranscript(transcript)
+            let finalEntry = HumanEntry(
+                id: newEntry.id, date: newEntry.date, filename: newEntry.filename,
+                previewText: previewText, entryType: .video, videoFilename: videoFilename
+            )
+            DispatchQueue.main.async {
+                self.entries.insert(finalEntry, at: 0)
+                self.entryDictionary[finalEntry.id] = finalEntry
+                self.selectedEntryId = finalEntry.id
+                self.currentVideoURL = videoDestURL
+                self.selectedVideoHasTranscript = transcript != nil && !transcript!.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                self.text = ""
+            }
+        } catch {
+            print("Error saving video entry: \(error)")
+        }
+    }
+
     // Add function to save text
     private func saveText() {
         let documentsDirectory = getDocumentsDirectory()
@@ -452,7 +768,9 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                     id: uuid,
                     date: displayDate,
                     filename: filename,
-                    previewText: preview
+                    previewText: preview,
+                    entryType: .text,
+                    videoFilename: nil
                 ),
                 date: fileDate,
                 content: content
@@ -489,7 +807,9 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                     id: uuid,
                     date: displayDate,
                     filename: filename,
-                    previewText: preview
+                    previewText: preview,
+                    entryType: .text,
+                    videoFilename: nil
                 ),
                 date: fileDate,
                 content: content
@@ -537,7 +857,9 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                     id: uuid,
                     date: displayDate,
                     filename: filename,
-                    previewText: preview
+                    previewText: preview,
+                    entryType: .text,
+                    videoFilename: nil
                 ),
                 date: fileDate,
                 content: content
@@ -1126,9 +1448,16 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
             ZStack {
                 Color(colorScheme == .light ? .white : .black)
                     .ignoresSafeArea()
-                
-              
-                if isSearchMode {
+
+                if let videoURL = currentVideoURL {
+                    VideoPlayerView(
+                        videoURL: videoURL,
+                        isPlaybackSuspended: isPreparingVideoRecording || showingVideoRecording
+                    )
+                    .id(videoURL.path)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .ignoresSafeArea(edges: .top)
+                } else if isSearchMode {
                     // Search UI
                     searchView
                 } else {
@@ -1500,7 +1829,76 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                             
                             Text("•")
                                 .foregroundColor(.gray)
-                            
+
+                            // Video camera button
+                            Button(action: {
+                                guard !isPreparingVideoRecording else { return }
+                                startVideoRecordingPreflight()
+                            }) {
+                                Group {
+                                    if isPreparingVideoRecording {
+                                        ProgressView()
+                                            .controlSize(.small)
+                                            .tint(isHoveringVideoButton ? textHoverColor : textColor)
+                                    } else {
+                                        Image(systemName: "video.fill")
+                                            .foregroundColor(isHoveringVideoButton ? textHoverColor : textColor)
+                                    }
+                                }
+                                .frame(width: 14, height: 14)
+                            }
+                            .buttonStyle(.plain)
+                            .onHover { hovering in
+                                isHoveringVideoButton = hovering
+                                isHoveringBottomNav = hovering
+                                if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+                            }
+                            .popover(
+                                isPresented: $showingVideoPermissionPopover,
+                                attachmentAnchor: .point(UnitPoint(x: 0.5, y: 0.0)),
+                                arrowEdge: .top
+                            ) {
+                                VStack(spacing: 0) {
+                                    if let fallbackMessage = videoPermissionPopoverFallbackMessage {
+                                        Text(fallbackMessage)
+                                            .font(.system(size: 14))
+                                            .foregroundColor(popoverTextColor)
+                                            .lineLimit(nil)
+                                            .multilineTextAlignment(.leading)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .padding(.horizontal, 12)
+                                            .padding(.vertical, 8)
+                                    }
+                                    ForEach(videoPermissionPopoverItems) { item in
+                                        if item.id != videoPermissionPopoverItems.first?.id || videoPermissionPopoverFallbackMessage != nil {
+                                            Divider()
+                                        }
+                                        Button(action: {
+                                            showingVideoPermissionPopover = false
+                                            openVideoPermissionSettings(item.settingsPane)
+                                        }) {
+                                            VStack(alignment: .leading, spacing: 3) {
+                                                Text(item.message).font(.system(size: 14)).lineLimit(nil).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                                                Text(item.buttonLabel).font(.system(size: 12)).opacity(0.85)
+                                            }
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .padding(.horizontal, 12)
+                                            .padding(.vertical, 8)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .foregroundColor(popoverTextColor)
+                                        .onHover { hovering in
+                                            if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+                                        }
+                                    }
+                                }
+                                .frame(minWidth: 300, idealWidth: 320, maxWidth: 360)
+                                .background(colorScheme == .light ? Color.white : Color.black)
+                            }
+
+                            Text("•")
+                                .foregroundColor(.gray)
+
                             Button("Chat") {
                                 showingChatMenu = true
                                 // Ensure didCopyPrompt is reset when opening the menu
@@ -1811,6 +2209,21 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                 }
             }
             
+            // Video recording overlay
+            .overlay {
+                if showingVideoRecording {
+                    VideoRecordingView(
+                        isPresented: $showingVideoRecording,
+                        cameraManager: preparedCameraManager
+                    ) { videoURL, transcript in
+                        saveVideoEntry(from: videoURL, transcript: transcript)
+                        var transaction = Transaction()
+                        transaction.disablesAnimations = true
+                        withTransaction(transaction) { showingVideoRecording = false }
+                    }
+                }
+            }
+
             // Right sidebar
             if showingSidebar {
                 Divider()
@@ -2153,6 +2566,21 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
     }
     
     private func loadEntry(entry: HumanEntry) {
+        if entry.entryType == .video {
+            text = ""
+            if let videoFilename = resolvedVideoFilename(for: entry) {
+                currentVideoURL = getVideoURL(for: videoFilename)
+                selectedVideoHasTranscript = loadTranscriptText(for: videoFilename) != nil
+            } else {
+                currentVideoURL = nil
+                selectedVideoHasTranscript = false
+            }
+            return
+        }
+
+        currentVideoURL = nil
+        selectedVideoHasTranscript = false
+
         let documentsDirectory = getDocumentsDirectory()
         let fileURL = documentsDirectory.appendingPathComponent(entry.filename)
         
@@ -2448,6 +2876,12 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
     }
     
     private func deleteEntry(entry: HumanEntry) {
+        // Clean up video assets if this is a video entry
+        if entry.entryType == .video, let videoFilename = resolvedVideoFilename(for: entry) {
+            deleteVideoAssets(for: videoFilename)
+            if currentVideoURL != nil { currentVideoURL = nil }
+        }
+
         let documentsDirectory = getDocumentsDirectory()
         let fileURL = documentsDirectory.appendingPathComponent(entry.filename)
         
