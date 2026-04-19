@@ -26,7 +26,14 @@
     <string>NSApplication</string>
     <key>NSHumanReadableCopyright</key>
     <string>© 2026 Flux</string>
+    <key>NSCameraUsageDescription</key>
+    <string>Record video journal entries</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Record audio for video journals</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Transcribe video journal entries</string>
     <key>GitCommit</key>
     <string>unknown</string>
-</dict>
+
+    </dict>
 </plist>

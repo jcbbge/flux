@@ -799,8 +799,27 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
 
         do {
             let content = try String(contentsOf: fileURL, encoding: .utf8)
-            let preview = generatePreview(from: content)
             let displayDate = DateFormatterCache.shared.string(from: fileDate, format: "MMM d")
+            
+            // Check if this is a video entry by looking for .mov file
+            let videoFilename = filename.replacingOccurrences(of: ".md", with: ".mov")
+            let isVideo = hasVideoAsset(for: videoFilename)
+            
+            let preview: String
+            let entryType: EntryType
+            let finalVideoFilename: String?
+            
+            if isVideo {
+                // Video entry - use transcript for preview
+                preview = videoPreviewText(for: videoFilename)
+                entryType = .video
+                finalVideoFilename = videoFilename
+            } else {
+                // Text entry
+                preview = generatePreview(from: content)
+                entryType = .text
+                finalVideoFilename = nil
+            }
 
             return (
                 entry: HumanEntry(
@@ -808,8 +827,8 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                     date: displayDate,
                     filename: filename,
                     previewText: preview,
-                    entryType: .text,
-                    videoFilename: nil
+                    entryType: entryType,
+                    videoFilename: finalVideoFilename
                 ),
                 date: fileDate,
                 content: content
@@ -902,6 +921,22 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
     }
     // MARK: - Entry Title/Subtitle Extraction
     private func extractTitleAndSubtitle(from entry: HumanEntry) -> (title: String, subtitle: String) {
+        // For video entries, use transcript
+        if entry.entryType == .video, let videoFilename = resolvedVideoFilename(for: entry) {
+            print("DEBUG: Video entry \(entry.filename), videoFilename: \(videoFilename)")
+            if let transcript = loadTranscriptText(for: videoFilename) {
+                print("DEBUG: Transcript loaded: \(transcript.prefix(100))")
+                let lines = transcript.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+                let title = lines.first?.trimmingCharacters(in: .whitespaces) ?? "Video Entry"
+                let subtitle = lines.dropFirst().first?.trimmingCharacters(in: .whitespaces) ?? ""
+                print("DEBUG: Title: \(title), Subtitle: \(subtitle)")
+                return (title: title, subtitle: subtitle)
+            }
+            print("DEBUG: No transcript found")
+            return (title: "Video Entry", subtitle: "")
+        }
+        
+        // For text entries
         let documentsDirectory = getDocumentsDirectory()
         let fileURL = documentsDirectory.appendingPathComponent(entry.filename)
         
@@ -1352,14 +1387,63 @@ let availableFonts = NSFontManager.shared.availableFontFamilies
                                 selectedEntryId = entry.id
                                 loadEntry(entry: entry)
                             }                        }) {
-                            let entryInfo = extractTitleAndSubtitle(from: entry)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(entry.date).font(.custom(selectedSecondaryFont, size: tokens.textSecondary)).foregroundColor(.secondary)
-                                Text(entryInfo.title).font(.custom(selectedSecondaryFont, size: tokens.textSecondary)).fontWeight(.regular).lineLimit(1).foregroundColor(.primary)
-                                Text(entryInfo.subtitle).font(.custom(selectedSecondaryFont, size: tokens.textSecondary)).lineLimit(1).foregroundColor(.secondary)
+                            Group {
+                                if entry.entryType == .video {
+                                    // VIDEO ENTRY VIEW
+                                    HStack(alignment: .top, spacing: tokens.spaceMd) {
+                                        // Thumbnail on left
+                                        if let videoFilename = resolvedVideoFilename(for: entry) {
+                                            if let thumbnail = loadThumbnailImage(for: videoFilename) {
+                                                Image(nsImage: thumbnail)
+                                                    .resizable()
+                                                    .aspectRatio(contentMode: .fill)
+                                                    .frame(width: 40, height: 40)
+                                                    .cornerRadius(4)
+                                                    .overlay(
+                                                        Image(systemName: "play.circle.fill")
+                                                            .foregroundColor(.white)
+                                                            .font(.system(size: 16))
+                                                    )
+                                            } else {
+                                                ZStack {
+                                                    Rectangle()
+                                                        .fill(Color.gray.opacity(0.3))
+                                                        .frame(width: 40, height: 40)
+                                                        .cornerRadius(4)
+                                                    Image(systemName: "video.fill")
+                                                        .foregroundColor(.gray)
+                                                        .font(.system(size: 16))
+                                                }
+                                            }
+                                        }
+                                        
+                                        // Date/title/subtitle on right
+                                        let entryInfo = extractTitleAndSubtitle(from: entry)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(entry.date).font(.custom(selectedSecondaryFont, size: tokens.textSecondary)).foregroundColor(.secondary)
+                                            Text(entryInfo.title).font(.custom(selectedSecondaryFont, size: tokens.textSecondary)).fontWeight(.regular).lineLimit(1).foregroundColor(.primary)
+                                            Text(entryInfo.subtitle).font(.custom(selectedSecondaryFont, size: tokens.textSecondary)).lineLimit(1).foregroundColor(.secondary)
+                                        }
+                                        Spacer()
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, tokens.spaceXl)
+                                    .padding(.vertical, tokens.spaceMd)
+                                    .background(RoundedRectangle(cornerRadius: 4).fill(backgroundColor(for: entry)))
+                                } else {
+                                    // TEXT ENTRY VIEW (original)
+                                    let entryInfo = extractTitleAndSubtitle(from: entry)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(entry.date).font(.custom(selectedSecondaryFont, size: tokens.textSecondary)).foregroundColor(.secondary)
+                                        Text(entryInfo.title).font(.custom(selectedSecondaryFont, size: tokens.textSecondary)).fontWeight(.regular).lineLimit(1).foregroundColor(.primary)
+                                        Text(entryInfo.subtitle).font(.custom(selectedSecondaryFont, size: tokens.textSecondary)).lineLimit(1).foregroundColor(.secondary)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, tokens.spaceXl)
+                                    .padding(.vertical, tokens.spaceMd)
+                                    .background(RoundedRectangle(cornerRadius: 4).fill(backgroundColor(for: entry)))
+                                }
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, tokens.spaceXl).padding(.vertical, tokens.spaceMd)
-                            .background(RoundedRectangle(cornerRadius: 4).fill(backgroundColor(for: entry)))
                         }
                         .buttonStyle(PlainButtonStyle()).contentShape(Rectangle())
                         .onHover { hovering in withAnimation(.easeInOut(duration: 0.2)) { hoveredEntryId = hovering ? entry.id : nil } }
