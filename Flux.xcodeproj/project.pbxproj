@@ -109,6 +109,7 @@
 				2857D46D2D5F8A8000EE1012 /* Frameworks */,
 				2857D46E2D5F8A8000EE1012 /* Resources */,
 				2800F7422DA1CEA0008FE5F9 /* Bake GitCommit into Info.plist */,
+				2800F7432DA1CEA1008FE5F9 /* Deploy to Applications */,
 			);
 			buildRules = (
 			);
@@ -628,6 +629,25 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "COMMIT=$(git -C \"$SRCROOT\" rev-parse --short HEAD 2>/dev/null || echo unknown)\n/usr/libexec/PlistBuddy -c \"Add :GitCommit string $COMMIT\" \"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\" 2>/dev/null || /usr/libexec/PlistBuddy -c \"Set :GitCommit $COMMIT\" \"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		2800F7432DA1CEA1008FE5F9 /* Deploy to Applications */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Deploy to Applications";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "pkill Flux 2>/dev/null || true\nsleep 0.5\nrm -rf /Applications/Flux.app\ncp -R \"${TARGET_BUILD_DIR}/${PRODUCT_NAME}.app\" /Applications/Flux.app\n/System/Library/Frameworks/CoreServices.framework/Versions/Current/Frameworks/LaunchServices.framework/Versions/Current/Support/lsregister -f /Applications/Flux.app\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */

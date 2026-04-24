@@ -31,6 +31,8 @@ Binary:  /Users/jrg/Library/Developer/Xcode/DerivedData/Flux-ejkelmnfjwtqssffcbt
 xcodebuild -project Flux.xcodeproj -scheme Flux -configuration Debug build
 ```
 
+This auto-deploys to `/Applications/Flux.app` via build phase. Spotlight/Finder will find it.
+
 **Clean build:**
 ```bash
 xcodebuild -project Flux.xcodeproj -scheme Flux -configuration Debug clean build
@@ -38,7 +40,7 @@ xcodebuild -project Flux.xcodeproj -scheme Flux -configuration Debug clean build
 
 **Launch:**
 ```bash
-pkill Flux; sleep 1; open "/Users/jrg/Library/Developer/Xcode/DerivedData/Flux-ejkelmnfjwtqssffcbtxkaxmkmho/Build/Products/Debug/Flux.app"
+open /Applications/Flux.app
 ```
 
 **Verify what's running:**
@@ -232,6 +234,32 @@ videoFilename: nil
 
 ---
 
+## Auto-Deploy Build Phase
+
+A `PBXShellScriptBuildPhase` called "Deploy to Applications" (ID `2800F7432DA1CEA1008FE5F9`) was added to `project.pbxproj`. It runs after the GitCommit phase on every build and:
+
+1. Kills running Flux process
+2. Copies built `.app` to `/Applications/Flux.app`
+3. Registers with LaunchServices
+
+This ensures Spotlight/Finder always finds the current build. No manual deployment needed.
+
+---
+
+## Upstream Sync
+
+**NEVER rebase or cherry-pick.** Use the sync script:
+
+```bash
+./scripts/sync-upstream.sh
+```
+
+This fetches upstream, shows what changed, and provides diff commands for manual review. ContentView.swift should NEVER be auto-merged — it has fork-specific code throughout.
+
+See `RUNBOOK.md` for complete step-by-step instructions.
+
+---
+
 ## Session Log
 
 ### 2026-04-14
@@ -254,3 +282,20 @@ videoFilename: nil
 **Current HEAD:** `0b3b181`
 **Branch:** `m5-updates`
 **Status:** Build succeeds, entries load, video feature integrated, GitCommit baked in
+
+### 2026-04-24
+
+**What was done:**
+- Added "Deploy to Applications" build phase — auto-copies built app to `/Applications/Flux.app` on every build
+- Created `RUNBOOK.md` — complete who/what/where/when/why/how documentation
+- Created `scripts/sync-upstream.sh` — interactive upstream sync helper
+- Fixed Spotlight issue — symlinks don't work, must copy actual .app bundle
+
+**Root cause of "missing video updates":**
+- `/Applications/Flux.app` was a stale copy from a previous manual install
+- Spotlight was launching that instead of the DerivedData build
+- Build was fine, source was fine, fork was fine — wrong binary was running
+
+**Current HEAD:** `9a04c4c`
+**Branch:** `m5-updates`
+**Status:** Build auto-deploys to /Applications, Spotlight works, upstream sync documented
