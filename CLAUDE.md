@@ -8,10 +8,10 @@
 
 ### This is a fork, not the upstream
 
-This repo (`jcbbge/flux`, branch `m5-updates`) is a **heavily customized fork** of `farzaa/freewrite`. The upstream project and this fork share almost no file paths, naming conventions, or architecture. Do not apply anything you know about the upstream without verifying it applies here.
+This repo (`jcbbge/flux`, branch `main`) is a **heavily customized fork** of `farzaa/freewrite`. The upstream project and this fork share almost no file paths, naming conventions, or architecture. Do not apply anything you know about the upstream without verifying it applies here.
 
 **Upstream remote:** `https://github.com/farzaa/freewrite` (configured as `upstream`)
-**Do not rebase or cherry-pick from upstream without explicit instruction.** A rebase attempt in a previous session corrupted `ContentView.swift` and required a full rollback from backup branch `backup/m5-updates-pre-rebase`.
+**There is one branch: `main`.** Past attempts to rebase upstream corrupted `ContentView.swift`. Do not rebase or cherry-pick from upstream without explicit instruction.
 
 ---
 
@@ -175,7 +175,7 @@ All 7 upstream commits (`4e8446a` through `c21d71c`) adding video journaling wer
 
 ### Do not use rebase or cherry-pick from upstream
 
-A full rebase was attempted early in the session. It destroyed the fork's `ContentView.swift` by mixing upstream and fork code, broke the nav layout, and lost entry loading. The branch was reset to `backup/m5-updates-pre-rebase` (commit `9193469`). That backup branch still exists and is safe.
+A full rebase was attempted early in the session. It destroyed the fork's `ContentView.swift` by mixing upstream and fork code, broke the nav layout, and lost entry loading. The branch was reset from a backup at commit `9193469`. (Historical safety backup branches have since been deleted during the 2026-05-25 consolidation — recovery would require git reflog.)
 
 **If you need to pull future upstream changes:**
 1. `git fetch upstream`
@@ -267,7 +267,7 @@ See `RUNBOOK.md` for complete step-by-step instructions.
 **What was done:**
 - Integrated upstream video feature (7 commits) into fork by hand
 - Added `upstream` remote pointing to `farzaa/freewrite`
-- Created backup branch `backup/m5-updates-pre-rebase` at `9193469`
+- Created safety backup branch at `9193469` (later deleted in 2026-05-25 consolidation)
 - Survived a failed rebase (reset back to backup)
 - Added `PBXShellScriptBuildPhase` to bake `GitCommit` into `Info.plist` at build time
 - Set `ENABLE_USER_SCRIPT_SANDBOXING = NO` on Flux target
@@ -280,7 +280,7 @@ See `RUNBOOK.md` for complete step-by-step instructions.
 - The AGENTS.md/CLAUDE.md in this repo described the upstream project, not the fork — all paths, structures, and storage locations in those docs were wrong for this machine
 
 **Current HEAD:** `0b3b181`
-**Branch:** `m5-updates`
+**Branch:** `main` (at the time of this session, the working branch was named `m5-updates`; later consolidated to `main` on 2026-05-25)
 **Status:** Build succeeds, entries load, video feature integrated, GitCommit baked in
 
 ### 2026-04-24
@@ -297,5 +297,22 @@ See `RUNBOOK.md` for complete step-by-step instructions.
 - Build was fine, source was fine, fork was fine — wrong binary was running
 
 **Current HEAD:** `9a04c4c`
-**Branch:** `m5-updates`
+**Branch:** `main` (at the time of this session, the working branch was named `m5-updates`; later consolidated to `main` on 2026-05-25)
 **Status:** Build auto-deploys to /Applications, Spotlight works, upstream sync documented
+
+### 2026-05-25
+
+**What was done:**
+- **Branch consolidation.** Collapsed `m5-updates`, `backup-20260419`, and `backup/m5-updates-pre-rebase` into a single `main` branch.
+- `main` now points at `4d06cea` (the tip of `backup-20260419`), which is the working state with video integration, auto-deploy, and GitCommit baking.
+- Deleted local branches: `m5-updates`, `backup-20260419`, `backup/m5-updates-pre-rebase`.
+- Deleted remote branches: `origin/m5-updates`, `origin/backup-20260419`.
+- Force-pushed `main` to `origin/main` (the previous `origin/main` history — which contained a divergent ContentView refactor — is no longer on the remote).
+- Updated `AGENTS.md`, `CLAUDE.md`, `RUNBOOK.md`, `scripts/sync-upstream.sh` to reference `main` everywhere.
+
+**Why:**
+- Only one user, only one machine, never distributed, never PRed upstream. Multiple branches were a remnant of the rebase recovery and added zero value.
+
+**Current HEAD after consolidation:** `4d06cea` (plus this docs commit on top)
+**Branch:** `main` — the only branch. There are no others. Do not create any.
+**Status:** Build still auto-deploys to /Applications. Video feature still works. Nothing about the running app changed.

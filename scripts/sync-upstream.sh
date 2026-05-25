@@ -14,7 +14,7 @@ git fetch upstream
 # Show what's new
 echo "New commits in upstream/main since last sync:"
 echo "----------------------------------------------"
-git log m5-updates..upstream/main --oneline
+git log main..upstream/main --oneline
 echo ""
 
 # Key files to check

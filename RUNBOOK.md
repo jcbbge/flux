@@ -27,7 +27,7 @@ git fetch upstream
 ## WHO
 
 - **Upstream:** `farzaa/freewrite` — the original macOS journaling app
-- **This fork:** `jcbbge/flux` (branch `m5-updates`) — customized version with lens sidebar, AI enrichment, fork-native filename format
+- **This fork:** `jcbbge/flux` (branch `main`, the only branch) — customized version with lens sidebar, AI enrichment, fork-native filename format
 - **You:** jrg, the only user and maintainer
 
 ---
@@ -115,7 +115,7 @@ cd ~/flux
 git fetch upstream
 
 # See what's new
-git log m5-updates..upstream/main --oneline
+git log main..upstream/main --oneline
 
 # For each file that changed in upstream:
 git show upstream/main:freewrite/SomeFile.swift > /tmp/upstream-version.swift
@@ -204,10 +204,11 @@ open /Applications/Flux.app
 
 ### Upstream merge destroyed ContentView
 ```bash
-git checkout backup/m5-updates-pre-rebase -- Flux/ContentView.swift
-# Or reset to last known good commit
+# Find last known-good commit and restore the file from it
 git log --oneline -20
 git checkout <good-commit> -- Flux/ContentView.swift
+# (The historical backup branch backup/m5-updates-pre-rebase was deleted in 2026-05-25.
+#  If you need pre-2026-04-14 state, look in `git reflog` for SHAs before the recovery.)
 ```
 
 ---
