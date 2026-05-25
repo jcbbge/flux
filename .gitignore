@@ -11,5 +11,6 @@ DerivedData/
 *~
 .DS_Store
 
-# Keep entries but not backups
+# Personal journal content — never tracked
+Entries/
 EntriesBackup/
